@@ -63,16 +63,17 @@ public:
         // critical section
         Bucket& bucket = buckets_[idx];
 
-        for (auto& entry : bucket) {
+        for (auto& entry : bucket) 
+        {
             if (entry.first == key) {
                 entry.second = value;
                 return;
             }
-    }
+        }
 
-    bucket.push_back(std::make_pair(key, value));
-    entryCount_++;
-}
+        bucket.push_back(std::make_pair(key, value));
+        entryCount_++;
+    }
 
     bool find(const K& key, V& val) const {
         size_t idx = bucketIndex(key);
@@ -80,14 +81,14 @@ public:
 
         //critical section
     
-        const Bucket& Bucket = buckets_[idx];
+        const Bucket& bucket = buckets_[idx];
         for(const auto& entry: bucket){
             if(entry.first == key){
                 val = entry.second;
                 return true;
             }
-        return False;
         }
+        return false;
     }
 
     bool remove(const K& key) {
@@ -95,7 +96,7 @@ public:
         MutexGuard guard(mutexes_[idx]);
         
         //critical section
-        
+
         Bucket& bucket = buckets_[idx];
 
         for (auto it = bucket.begin(); it != bucket.end(); ++it) {
