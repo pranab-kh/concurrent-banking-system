@@ -6,15 +6,15 @@
 #include <list>
 #include <utility>
 #include <functional>
-#include<stdexcept>
+#include <stdexcept>
+#include <atomic>
+
 
 class MutexGuard {
 public:
     explicit MutexGuard(pthread_mutex_t& m) : mutex_(m) {
         pthread_mutex_lock(&mutex_);
     }
-
-    //sensitive content
 
     ~MutexGuard() {
         pthread_mutex_unlock(&mutex_);
@@ -31,36 +31,43 @@ class HashTable{
 private:
     using Bucket = std::list<std::pair<K,V>>;
     std::vector<Bucket> buckets_;
-    size_t entryCount_;
-    mutable pthread_mutex_t mutex_;
+    mutable std::vector<pthread_mutex_t> mutexes_; 
+    std::atomic<size_t> entryCount_;   
 
 public:
-    explicit HashTable(size_t bucketCount = 16)
-        : buckets_(bucketCount), entryCount_(0)
+    explicit HashTable(size_t bucketCount = 16) : buckets_(bucketCount), mutexes_(bucketCount), entryCount_(0)
     {
-        if(pthread_mutex_init(&mutex_, nullptr) != 0){
-            throw std::runtime_error("Failed to initialize mutex")
+        for (size_t i = 0; i < mutexes_.size(); ++i) 
+        {
+            if (pthread_mutex_init(&mutexes_[i], nullptr) != 0) 
+            {
+                throw std::runtime_error("Failed to initialize mutex");
+            }
         }
     }
 
-    ~HashTable() {
-        pthread_mutex_destroy(&mutex_);
+    ~HashTable()
+    {
+        for (size_t i = 0; i < mutexes_.size(); ++i) {
+            pthread_mutex_destroy(&mutexes_[i]);
+        }
     }
 
     HashTable(const HashTable&) = delete;
     HashTable& operator=(const HashTable&) = delete;
 
-    void insert(const K& key, const V& value) {
-    MutexGuard guard(mutex_);
+    void insert(const K& key, const V& value) 
+    {
+        size_t idx = bucketIndex(key);
+        MutexGuard guard(mutexes_[idx]);
+        // critical section
+        Bucket& bucket = buckets_[idx];
 
-    size_t idx = bucketIndex(key);
-    Bucket& bucket = buckets_[idx];
-
-    for (auto& entry : bucket) {
-        if (entry.first == key) {
-            entry.second = value;
-            return;
-        }
+        for (auto& entry : bucket) {
+            if (entry.first == key) {
+                entry.second = value;
+                return;
+            }
     }
 
     bucket.push_back(std::make_pair(key, value));
@@ -68,9 +75,12 @@ public:
 }
 
     bool find(const K& key, V& val) const {
-        MutexGuard guard(mutex_);
-        size_t indx = bucketIndex(key);
-        const Bucket& Bucket = buckets_[indx];
+        size_t idx = bucketIndex(key);
+        MutexGuard guard(mutexes_[idx]);
+
+        //critical section
+    
+        const Bucket& Bucket = buckets_[idx];
         for(const auto& entry: bucket){
             if(entry.first == key){
                 val = entry.second;
@@ -81,9 +91,11 @@ public:
     }
 
     bool remove(const K& key) {
-        MutexGuard guard(mutex_);
-
         size_t idx = bucketIndex(key);
+        MutexGuard guard(mutexes_[idx]);
+        
+        //critical section
+        
         Bucket& bucket = buckets_[idx];
 
         for (auto it = bucket.begin(); it != bucket.end(); ++it) {
