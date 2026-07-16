@@ -110,12 +110,21 @@ public:
         return false;
     }
 
+    bool contains(const K& key) const 
+    {
+        V dummy;
+        return find(key, dummy);
+    }
+
+    size_t size() const {
+        return entryCount_.load();
+    }   
+
 private:
     size_t bucketIndex(const K& key) const {
         return std::hash<K>{}(key) % buckets_.size();
     }
 };
-
 
 
 #endif
