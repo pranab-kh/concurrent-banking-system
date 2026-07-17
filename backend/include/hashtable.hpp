@@ -1,6 +1,8 @@
 #ifndef HASHTABLE_HPP
 #define HASHTABLE_HPP
 
+#include "mutex_guard.hpp"
+
 #include <pthread.h>
 #include <vector>
 #include <list>
@@ -8,23 +10,6 @@
 #include <functional>
 #include <stdexcept>
 #include <atomic>
-
-
-class MutexGuard {
-public:
-    explicit MutexGuard(pthread_mutex_t& m) : mutex_(m) {
-        pthread_mutex_lock(&mutex_);
-    }
-
-    ~MutexGuard() {
-        pthread_mutex_unlock(&mutex_);
-    }
-    MutexGuard(const MutexGuard&) = delete;
-    MutexGuard& operator=(const MutexGuard&) = delete;
-
-private:
-    pthread_mutex_t& mutex_;
-};
 
 template<typename K, typename V>
 class HashTable{

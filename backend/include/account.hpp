@@ -1,6 +1,8 @@
 #ifndef ACCOUNT_HPP
 #define ACCOUNT_HPP
 
+#include "mutex_guard.hpp"
+
 #include <pthread.h>
 #include <string>
 #include <stdexcept>
@@ -31,6 +33,33 @@ public:
 
     Account(const Account&) = delete;
     Account& operator=(const Account&) = delete;
+
+    void deposit(long long amountCents) 
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Deposit amount must be positive");
+        }
+
+        MutexGuard guard(mutex_);
+        balanceCents_ += amountCents;
+    }
+
+    bool withdraw(long long amountCents)
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Withdrawal amount must be positive");
+        }
+
+        MutexGuard guard(mutex_);
+        if (amountCents > balanceCents_) {
+            return false;
+        }
+
+        balanceCents_ -= amountCents;
+        return true;
+    }
+
+    
 
 };
 
