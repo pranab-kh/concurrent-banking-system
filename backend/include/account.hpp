@@ -59,7 +59,18 @@ public:
         return true;
     }
 
-    
+    long long getBalance() const {
+        MutexGuard guard(mutex_);
+        return balanceCents_;
+    }
+
+    int getAccountId() const {
+        return accountId_;
+    }
+
+    std::string getOwnerName() const {
+        return ownerName_;
+    }
 
 };
 
