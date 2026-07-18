@@ -1,109 +1,77 @@
-#pragma once
-#include <iostream>
+#ifndef ACCOUNT_HPP
+#define ACCOUNT_HPP
+
+#include "mutex_guard.hpp"
+
+#include <pthread.h>
 #include <string>
-#include <vector>
-#include <stdint.h>
-class Transaction;
-class Account
-{
-    int account_id;
-    std::string holder_name;
-    std::vector<Transaction> transaction_log;
-    double balance = 0;
-    // friend class Transaction;
-//  double get_balance()
-//     {
-//         return balance;
-//     }
-//     bool debit_account(double amount)
-    // {
-//         balance -= amount;
-//         return true;
-//     }
-//     bool credit_account(double amount)
-//     {
-//         balance += amount;
-//         return true;
-//     }
-//     void update_balance(double amount)
-//     {
-//         balance = amount;
-//     }
+#include <stdexcept>
+
+class Account {
+private:
+    int accountId_;
+    std::string ownerName_;
+    long long balanceCents_;
+    mutable pthread_mutex_t mutex_;
+
 public:
-    // Account creation
-    Account()
+    Account(int accountId, const std::string& ownerName, long long initialBalanceCents = 0)
+        : accountId_(accountId), ownerName_(ownerName), balanceCents_(initialBalanceCents)
     {
+        if (initialBalanceCents < 0) {
+            throw std::invalid_argument("Initial balance cannot be negative");
+        }
+
+        if (pthread_mutex_init(&mutex_, nullptr) != 0) {
+            throw std::runtime_error("Failed to initialize account mutex");
+        }
     }
 
-   
-};
+    ~Account() {
+        pthread_mutex_destroy(&mutex_);
+    }
 
-class User
-{
-    std::string name;
-    std::string telephone;
-    std::string address;
-    std::vector<Account> accounts;
-};
+    Account(const Account&) = delete;
+    Account& operator=(const Account&) = delete;
 
-class Transaction
-{
-    int transaction_id;
-    double amount;
-    std::string status;
-    std::string remarks;
-    std::string type;
-    std::string error_message;
-    int account_src;
-    int account_destination;
-    uint64_t timestampUs;
+    void deposit(long long amountCents) 
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Deposit amount must be positive");
+        }
 
-    public:
+        MutexGuard guard(mutex_);
+        balanceCents_ += amountCents;
+    }
 
+    bool withdraw(long long amountCents)
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Withdrawal amount must be positive");
+        }
 
-    // void withdraw(Account &acc)
-    // {
-    //     if(amount > acc.get_balance())
-    //     {
-    //         status = "Failed";
-    //         error_message = "Insufficient Funds";
-    //     }
-    //     else
-    //     {
-    //         acc.debit_account(amount);
-    //         status ="Success";
-    //     }
+        MutexGuard guard(mutex_);
+        if (amountCents > balanceCents_) {
+            return false;
+        }
 
-    // }
-    // void deposit(Account &acc)
-    // {
-    //     acc.credit_account(amount);
-    //     status = "Success";
-    // }
-    // void transfer(Account &src ,Account &dest)
-    // {
-    //     if(amount > src.get_balance())
-    //     {
-    //         status = "Failed";
-    //         error_message = "Insufficient Balance";
-    //     }
-    //     else
-    //     {
-    //         double src_balance = src.get_balance();
-    //         double dest_balance = dest.get_balance();
-    //         if(src.debit_account(amount)== true && dest.credit_account(amount)== true)
-    //         {
-    //             status = "Success";
-    //         }
-    //         else
-    //         {
-    //             src.update_balance(src_balance);
-    //             dest.update_balance(dest_balance);
+        balanceCents_ -= amountCents;
+        return true;
+    }
 
-    //         }
-            
-    //     }
-    // }
+    long long getBalance() const {
+        MutexGuard guard(mutex_);
+        return balanceCents_;
+    }
 
+    int getAccountId() const {
+        return accountId_;
+    }
+
+    std::string getOwnerName() const {
+        return ownerName_;
+    }
 
 };
+
+#endif 
