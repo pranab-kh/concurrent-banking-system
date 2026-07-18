@@ -34,7 +34,7 @@ public:
     Account(const Account&) = delete;
     Account& operator=(const Account&) = delete;
 
-    void deposit(long long amountCents) 
+    bool deposit(long long amountCents) 
     {
         if (amountCents <= 0) {
             throw std::invalid_argument("Deposit amount must be positive");
@@ -42,6 +42,7 @@ public:
 
         MutexGuard guard(mutex_);
         balanceCents_ += amountCents;
+        return true;
     }
 
     bool withdraw(long long amountCents)
