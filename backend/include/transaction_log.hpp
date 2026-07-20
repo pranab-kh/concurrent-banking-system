@@ -43,6 +43,25 @@ public:
         transactions_.push_back(t);
     }
 
+    std::vector<Transaction> getHistoryForAccount(int accountId) const
+    {
+        MutexGuard guard(mutex_);
+
+        std::vector<Transaction> result;
+        for (const auto& t : transactions_) {
+            if (t.accountId == accountId) {
+                result.push_back(t);
+            }
+        }
+        return result;
+    }
+
+    std::vector<Transaction> getAllTransactions() const
+    {
+        MutexGuard guard(mutex_);
+        return transactions_;
+    }
+
 };
 
 #endif
