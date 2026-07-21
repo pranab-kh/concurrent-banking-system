@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include<unordered_map>>
+#include<unordered_map>
 #include <vector>
 #include <cmath>
 #include "account.hpp"
@@ -9,8 +9,8 @@
 class User
 {
     public:
-    int account_id;
-    std::string user_id;
+    
+    int user_id;
     std::string full_name;
     std::string address;
     std::string mobile;

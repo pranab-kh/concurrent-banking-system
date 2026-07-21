@@ -11,6 +11,21 @@ enum class TransactionType
     TRANSFER_IN,
     TRANSFER_OUT
 };
+
+struct Transaction 
+{
+    int transaction_id;
+    std::optional<int> from_account;
+    std::optional<int> to_account;
+    int64_t transaction_amount;
+    std::string receiver_name;
+    std::string receiver_mobile;
+    std::string remarks;
+    std::string transaction_status;
+    std::string transaction_at;
+    std::string transaction_type;
+   
+};
 struct Account
 {
   
@@ -26,20 +41,6 @@ struct Account
     std::vector<Transaction> transactions;
     
 
-};
-struct Transaction 
-{
-    int transaction_id;
-    int from_account;
-    int to_account;
-    int64_t transaction_amount;
-    std::string receiver_name;
-    std::string receiver_mobile;
-    std::string remarks;
-    std::string transaction_status;
-    std::string transaction_at;
-    std::string transaction_type;
-   
 };
 
 #endif

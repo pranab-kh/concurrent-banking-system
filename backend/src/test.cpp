@@ -7,6 +7,8 @@
 #include "hashtable.hpp"
 #include "user.hpp"
 
+std::unordered_map<int, User> bank_db;
+
 int main()
 {
 
@@ -44,8 +46,6 @@ int main()
 
             pqxx::result res = read.exec(query);
 
-            std::unordered_map<int, User> bank_db;
-
             for (const auto &row : res)
             {
                 if (row["user_id"].is_null())
@@ -58,6 +58,7 @@ int main()
                 // 1. Initialize and Map the User Details safely if it's the first time seeing this User ID
                 if (bank_db.find(u_id) == bank_db.end())
                 {
+                    bank_db[u_id].user_id = row["user_id"].as<int>();
                     bank_db[u_id].full_name = row["full_name"].as<std::string>();
                     bank_db[u_id].address = row["address"].as<std::string>();
                     bank_db[u_id].mobile = row["mobile"].as<std::string>();
@@ -99,10 +100,9 @@ int main()
                         tx.transaction_status = row["transaction_status"].as<std::string>();
                         tx.transaction_at = row["transaction_at"].as<std::string>();
 
-                        // FIX: Using std::optional or checking nulls for fields that can be empty in your schema
-                        tx.from_account = row["from_account"].is_null() ? 0 : row["from_account"].as<int>();
-                        tx.to_account = row["to_account"].is_null() ? 0 : row["to_account"].as<int>();
-
+                        // optional int these field can be null
+                        tx.from_account = row["from_account"].as<std::optional<int>>();
+                        tx.to_account = row["to_account"].as<std::optional<int>>();
                         tx.receiver_name = row["receiver_name"].is_null() ? "" : row["receiver_name"].as<std::string>();
                         tx.receiver_mobile = row["receiver_mobile"].is_null() ? "" : row["receiver_mobile"].as<std::string>();
 
@@ -112,12 +112,62 @@ int main()
             }
         }
     }
-        
-        catch (std::exception &e)
-        {
-            std::cerr << "Database Connection Failed" << e.what() << std::endl;
-            return 1;
-        }
 
-        return 0;
+    catch (std::exception &e)
+    {
+        std::cerr << "Database Connection Failed" << e.what() << std::endl;
+        return 1;
     }
+
+    std::cout << std::left;
+    std::cout << std::setw(10) << "UserID"
+              << std::setw(20) << "Name"
+              << std::setw(12) << "AcctID"
+              << std::setw(14) << "Balance"
+              << std::setw(14) << "Status"
+              << std::setw(10) << "TxnID"
+              << std::setw(14) << "Amount"
+              << std::setw(18) << "Receiver"
+              << std::setw(20) << "Remarks"
+              << std::setw(22) << "Time"
+              << std::setw(14) << "Type"
+              << std::endl;
+
+    std::cout << std::string(140, '-') << std::endl;
+
+    for (const auto &[u_id, u_data] : bank_db)
+    {
+        for (const auto &[a_id, a_data] : u_data.accounts)
+        {
+            if (a_data.transactions.empty())
+            {
+                std::cout << std::setw(10) << u_data.user_id
+                          << std::setw(20) << u_data.full_name
+                          << std::setw(12) << a_data.account_id
+                          << std::setw(14) << a_data.actual_balance
+                          << std::setw(14) << a_data.account_status
+                          << "(no transactions)"
+                          << std::endl;
+                continue;
+            }
+
+            for (const auto &transaction : a_data.transactions)
+            {
+                std::cout << std::setw(10) << u_data.user_id
+                          << std::setw(20) << u_data.full_name
+                          << std::setw(12) << a_data.account_id
+                          << std::setw(14) << a_data.actual_balance
+                          << std::setw(14) << a_data.account_status
+                          << std::setw(10) << transaction.transaction_id
+                          << std::setw(14) << transaction.transaction_amount
+                          << std::setw(18) << transaction.receiver_name
+                          << std::setw(20) << transaction.remarks
+                          << std::setw(22) << transaction.transaction_at
+                          << std::setw(14) << transaction.transaction_type
+                          << std::endl;
+            }
+        }
+    }
+
+    return 0;
+}
