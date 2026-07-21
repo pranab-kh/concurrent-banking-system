@@ -2,7 +2,6 @@
 #define HASHTABLE_HPP
 
 #include "mutex_guard.hpp"
-
 #include <pthread.h>
 #include <vector>
 #include <list>
