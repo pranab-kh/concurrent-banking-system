@@ -22,9 +22,8 @@ private:
     }
 
     void run() {
-        while (!shuttingDown_) {
-            TransactionRequest req = queue_.pop();
-            if (shuttingDown_) break;
+        TransactionRequest req;
+        while (queue_.pop(req)) {
             bank_.process(req);
         }
     }
@@ -39,6 +38,13 @@ public:
                 throw std::runtime_error("Failed to create worker thread");
             }
             workers_.push_back(thread);
+        }
+    }
+
+    ~WorkerPool() {
+        queue_.shutdown();
+        for (auto& t : workers_) {
+            pthread_join(t, nullptr);
         }
     }
 };
