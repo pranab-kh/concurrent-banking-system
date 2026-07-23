@@ -4,6 +4,15 @@
 #include "transaction.hpp"
 #include <optional>
 
+struct LoginRequest
+{
+
+};
+
+struct AccountCreationRequest
+{
+
+};
 struct TransactionRequest {
     TransactionType type;
     int accountId;
