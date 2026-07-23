@@ -72,6 +72,33 @@ public:
         return ownerName_;
     }
 
+    pthread_mutex_t& getMutex() {
+        return mutex_;
+    }
+
+    // these all are internal variants 
+    void depositUnlocked(long long amountCents) {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Deposit amount must be positive");
+        }
+        balanceCents_ += amountCents;
+    }
+
+    bool withdrawUnlocked(long long amountCents) {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Withdrawal amount must be positive");
+        }
+        if (amountCents > balanceCents_) {
+            return false;
+        }
+        balanceCents_ -= amountCents;
+        return true;
+    }
+
+    long long getBalanceUnlocked() const {
+        return balanceCents_;
+    }
+
 };
 
 #endif 

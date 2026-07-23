@@ -92,21 +92,39 @@ private:
         return log_.getHistoryForAccount(accountId);
     }
 
-    bool transfer(int fromId, int toId, long long amountCents) 
-    {
+    bool transfer(int fromId, int toId, long long amountCents) {
         if (amountCents <= 0 || fromId == toId) return false;
 
         std::shared_ptr<Account> from, to;
         if (!accounts_.find(fromId, from)) return false;
         if (!accounts_.find(toId, to)) return false;
 
-        if (!from->withdraw(amountCents)) return false;
-        to->deposit(amountCents);
+        // Lock in consistent order: lower account ID first
+        Account* first  = (fromId < toId) ? from.get() : to.get();
+        Account* second = (fromId < toId) ? to.get()   : from.get();
 
-        log_.record(TransactionType::TRANSFER_OUT, fromId, amountCents, from->getBalance(), toId);
-        log_.record(TransactionType::TRANSFER_IN, toId, amountCents, to->getBalance(), fromId);
+        pthread_mutex_lock(&first->getMutex());
+        pthread_mutex_lock(&second->getMutex());
 
-        return true;
+        bool success = false;
+        if (from->getBalanceUnlocked() >= amountCents) {
+            from->withdrawUnlocked(amountCents);
+            to->depositUnlocked(amountCents);
+            success = true;
+        }
+
+        long long fromBalance = from->getBalanceUnlocked();
+        long long toBalance = to->getBalanceUnlocked();
+
+        pthread_mutex_unlock(&second->getMutex());
+        pthread_mutex_unlock(&first->getMutex());
+
+        if (success) {
+            log_.record(TransactionType::TRANSFER_OUT, fromId, amountCents, fromBalance, toId);
+            log_.record(TransactionType::TRANSFER_IN, toId, amountCents, toBalance, fromId);
+        }
+
+        return success;
     }
 };
 
