@@ -12,6 +12,7 @@ private:
     std::queue<TransactionRequest> queue_;
     pthread_mutex_t mutex_;
     pthread_cond_t notEmpty_;
+    bool shuttingDown_ = false;
 
 public:
     RequestQueue() 
@@ -38,18 +39,35 @@ public:
 
     void push(TransactionRequest req) {
         MutexGuard guard(mutex_);
+        if (shuttingDown_) return;
         queue_.push(req);
         pthread_cond_signal(&notEmpty_);
     }
 
-    TransactionRequest pop() {
+
+    void notifyAll() {
         MutexGuard guard(mutex_);
-        while (queue_.empty()) {
+        pthread_cond_broadcast(&notEmpty_);
+    }
+
+    void shutdown() {
+        MutexGuard guard(mutex_);
+        shuttingDown_ = true;
+        pthread_cond_broadcast(&notEmpty_);
+    }
+
+    
+    bool pop(TransactionRequest& outReq) {
+        MutexGuard guard(mutex_);
+        while (queue_.empty() && !shuttingDown_) {
             pthread_cond_wait(&notEmpty_, &mutex_);
         }
-        TransactionRequest req = queue_.front();
+        if (shuttingDown_ && queue_.empty()) {
+            return false;
+        }
+        outReq = queue_.front();
         queue_.pop();
-        return req;
+        return true;
     }
 };
 
