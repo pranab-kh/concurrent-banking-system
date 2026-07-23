@@ -2,6 +2,7 @@
 #define REQUEST_QUEUE_HPP
 
 #include "transaction_request.hpp"
+#include "mutex_guard.hpp"
 #include <pthread.h>
 #include <queue>
 #include <stdexcept>
@@ -34,6 +35,22 @@ public:
 
     RequestQueue(const RequestQueue&) = delete;
     RequestQueue& operator=(const RequestQueue&) = delete;
+
+    void push(TransactionRequest req) {
+        MutexGuard guard(mutex_);
+        queue_.push(req);
+        pthread_cond_signal(&notEmpty_);
+    }
+
+    TransactionRequest pop() {
+        MutexGuard guard(mutex_);
+        while (queue_.empty()) {
+            pthread_cond_wait(&notEmpty_, &mutex_);
+        }
+        TransactionRequest req = queue_.front();
+        queue_.pop();
+        return req;
+    }
 };
 
 #endif
