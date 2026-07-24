@@ -22,6 +22,7 @@ private:
     HashTable<int, std::shared_ptr<Account>> accounts_;
     TransactionLog log_;
 
+public:
     bool createAccount(int accountId, const std::string& ownerName, long long initialBalanceCents = 0) 
     {
         if (accounts_.contains(accountId)) {
