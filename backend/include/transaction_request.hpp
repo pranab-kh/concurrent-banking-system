@@ -6,6 +6,7 @@
 
 struct TransactionRequest {
     TransactionType type;
+    int requestId; 
     int accountId;
     long long amountCents;
     std::optional<int> relatedAccountId;   // only used for TRANSFER

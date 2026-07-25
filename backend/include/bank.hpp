@@ -5,6 +5,8 @@
 #include "account.hpp"
 #include "transaction_log.hpp"
 #include "transaction_request.hpp"
+#include "response_queue.hpp"
+
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,19 +36,39 @@ public:
         return true;
     }
 
-    bool process(const TransactionRequest& req) 
-    {
+    TransactionResponse process(const TransactionRequest& req) {
+        TransactionResponse resp;
+        resp.requestId = req.requestId;
+
         switch (req.type) {
-            case TransactionType::DEPOSIT:
-                return deposit(req.accountId, req.amountCents);
-            case TransactionType::WITHDRAWAL:
-                return withdraw(req.accountId, req.amountCents);
-            case TransactionType::TRANSFER_OUT:
-                if (!req.relatedAccountId.has_value()) return false;
-                return transfer(req.accountId, req.relatedAccountId.value(), req.amountCents);
+            case TransactionType::DEPOSIT: {
+                resp.success = deposit(req.accountId, req.amountCents);
+                resp.message = resp.success ? "OK" : "Account not found";
+                break;
+            }
+            case TransactionType::WITHDRAWAL: {
+                resp.success = withdraw(req.accountId, req.amountCents);
+                resp.message = resp.success ? "OK" : "Insufficient funds or account not found";
+                break;
+            }
+            case TransactionType::TRANSFER_OUT: {
+                if (!req.relatedAccountId.has_value()) {
+                    resp.success = false;
+                    resp.message = "Missing destination account";
+                    break;
+                }
+                resp.success = transfer(req.accountId, req.relatedAccountId.value(), req.amountCents);
+                resp.message = resp.success ? "OK" : "Transfer failed";
+                break;
+            }
             default:
-                return false;
+                resp.success = false;
+                resp.message = "Unknown request type";
         }
+
+        long long bal;
+        resp.newBalanceCents = getBalance(req.accountId, bal) ? bal : 0;
+        return resp;
     }
 
     bool deposit(int accountId, long long amountCents) 
