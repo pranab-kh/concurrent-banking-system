@@ -1,11 +1,10 @@
 #ifndef ACCOUNT_HPP
 #define ACCOUNT_HPP
 
-// #include "mutex_guard.hpp"
-
-// #include <pthread.h>
-// #include <string>
-// #include <stdexcept>
+#include "mutex_guard.hpp"
+#include <pthread.h>
+#include <string>
+#include <stdexcept>
 #include "transaction.hpp"
 
 class Account {
@@ -20,6 +19,8 @@ private:
     std::string account_created_at;
     std::string account_updated_at;
     std::unordered_map<int, Transaction> transactions;
+    mutable pthread_mutex_t mutex_;
+    
 
 public:
     // Default constructor
@@ -55,88 +56,79 @@ public:
           account_updated_at(std::move(account_updated_at_)),
           transactions(std::move(transactions_)) {
     }
+    
+    
     // Getters
-int get_account_id() const { return account_id; }
-const std::string& get_account_holder() const { return account_holder; }
-int64_t get_actual_balance() const { return actual_balance; }
-int64_t get_available_balance() const { return available_balance; }
-int64_t get_hold_amount() const { return hold_amount; }
-const std::string& get_account_status() const { return account_status; }
-const std::string& get_account_type() const { return account_type; }
-const std::string& get_account_created_at() const { return account_created_at; }
-const std::string& get_account_updated_at() const { return account_updated_at; }
-const std::unordered_map<int, Transaction>& get_transactions() const { return transactions; }
+    int get_account_id() const { return account_id; }
+    const std::string& get_account_holder() const { return account_holder; }
+    int64_t get_actual_balance() const { return actual_balance; }
+    int64_t get_available_balance() const { return available_balance; }
+    int64_t get_hold_amount() const { return hold_amount; }
+    const std::string& get_account_status() const { return account_status; }
+    const std::string& get_account_type() const { return account_type; }
+    const std::string& get_account_created_at() const { return account_created_at; }
+    const std::string& get_account_updated_at() const { return account_updated_at; }
+    const std::unordered_map<int, Transaction>& get_transactions() const { return transactions; }
 
 
 
+    pthread_mutex_t& getMutex() {
+        return mutex_;
+    }
+
+        bool deposit(int64_t amountCents) 
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Deposit amount must be positive");
+        }
+
+        MutexGuard guard(mutex_);
+        actual_balance += amountCents;
+        return true;
+    }
+
+    bool withdraw(int64_t amountCents)
+    {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Withdrawal amount must be positive");
+        }
+
+        MutexGuard guard(mutex_);
+        if (amountCents > actual_balance) {
+            return false;
+        }
+
+        actual_balance -= amountCents;
+        return true;
+    }
+
+
+    // these all are internal variants 
+    void depositUnlocked(long long amountCents) {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Deposit amount must be positive");
+        }
+        balanceCents_ += amountCents;
+    }
+
+    bool withdrawUnlocked(long long amountCents) {
+        if (amountCents <= 0) {
+            throw std::invalid_argument("Withdrawal amount must be positive");
+        }
+        if (amountCents > balanceCents_) {
+            return false;
+        }
+        balanceCents_ -= amountCents;
+        return true;
+    }
+
+    long long getBalanceUnlocked() const {
+        return balanceCents_;
+    }
+
+    ~Account() {
+        pthread_mutex_destroy(&mutex_);
+    }
 };
-
-// class Account {
-// private:
-//     int accountId_;
-//     std::string ownerName_;
-//     long long balanceCents_;
-//     mutable pthread_mutex_t mutex_;
-
-// public:
-//     Account(int accountId, const std::string& ownerName, long long initialBalanceCents = 0)
-//         : accountId_(accountId), ownerName_(ownerName), balanceCents_(initialBalanceCents)
-//     {
-//         if (initialBalanceCents < 0) {
-//             throw std::invalid_argument("Initial balance cannot be negative");
-//         }
-
-//         if (pthread_mutex_init(&mutex_, nullptr) != 0) {
-//             throw std::runtime_error("Failed to initialize account mutex");
-//         }
-//     }
-
-//     ~Account() {
-//         pthread_mutex_destroy(&mutex_);
-//     }
-
-//     Account(const Account&) = delete;
-//     Account& operator=(const Account&) = delete;
-
-//     bool deposit(long long amountCents) 
-//     {
-//         if (amountCents <= 0) {
-//             throw std::invalid_argument("Deposit amount must be positive");
-//         }
-
-//         MutexGuard guard(mutex_);
-//         balanceCents_ += amountCents;
-//         return true;
-//     }
-
-//     bool withdraw(long long amountCents)
-//     {
-//         if (amountCents <= 0) {
-//             throw std::invalid_argument("Withdrawal amount must be positive");
-//         }
-
-//         MutexGuard guard(mutex_);
-//         if (amountCents > balanceCents_) {
-//             return false;
-//         }
-
-//         balanceCents_ -= amountCents;
-//         return true;
-//     }
-
-//     long long getBalance() const {
-//         MutexGuard guard(mutex_);
-//         return balanceCents_;
-//     }
-
-//     int getAccountId() const {
-//         return accountId_;
-//     }
-
-//     std::string getOwnerName() const {
-//         return ownerName_;
-//     }
-
-// };
 
 #endif 

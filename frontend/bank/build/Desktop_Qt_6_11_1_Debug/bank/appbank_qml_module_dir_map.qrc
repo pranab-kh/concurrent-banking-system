@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/">
+    <file alias="/qt/qml/bank">/home/pratik0000/bank/build/Desktop_Qt_6_11_1_Debug/bank</file>
+
+  </qresource>
+</RCC>

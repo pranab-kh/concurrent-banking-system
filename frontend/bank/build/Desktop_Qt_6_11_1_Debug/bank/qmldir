@@ -1,0 +1,11 @@
+module bank
+typeinfo appbank.qmltypes
+prefer :/qt/qml/bank/
+Main 1.0 Main.qml
+Style 1.0 Style.qml
+DashboardPage 1.0 views/DashboardPage.qml
+LoginPage 1.0 views/LoginPage.qml
+SendMoneyPage 1.0 views/SendMoneyPage.qml
+ReceiveMoneyPage 1.0 views/ReceiveMoneyPage.qml
+depends QtQuick
+
