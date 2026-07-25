@@ -5,10 +5,10 @@
 #include "bank.hpp"
 #include <pthread.h>
 #include <vector>
-
+template <class T>
 class WorkerPool {
 private:
-    RequestQueue& queue_;
+    RequestQueue<T>& queue_;
     Bank& bank_;
     std::vector<pthread_t> workers_;
     int numWorkers_;

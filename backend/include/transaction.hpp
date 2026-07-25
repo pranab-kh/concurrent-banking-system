@@ -4,12 +4,12 @@
 #include <ctime>
 #include <optional>
 #include <unordered_map>
-#include<utility>
-#include<cstdint>
-#include<cstdlib>
-#include<iomanip>
+#include <utility>
+#include <cstdint>
+#include <cstdlib>
+#include <iomanip>
 
-enum class TransactionType 
+enum class TransactionType
 {
     DEPOSIT,
     WITHDRAWAL,
@@ -17,7 +17,8 @@ enum class TransactionType
     TRANSFER_OUT
 };
 
-class Transaction {
+class Transaction
+{
 private:
     int transaction_id;
     std::optional<int> from_account;
@@ -35,12 +36,12 @@ public:
     Transaction() = default;
 
     // // Delete copy operations (non-copyable)
-    Transaction(const Transaction&) = delete;
-    Transaction& operator=(const Transaction&) = delete;
+    Transaction(const Transaction &) = delete;
+    Transaction &operator=(const Transaction &) = delete;
 
     // // Default move operations (move-only)
-    Transaction(Transaction&&) = default;
-    Transaction& operator=(Transaction&&) = default;
+    Transaction(Transaction &&) = default;
+    Transaction &operator=(Transaction &&) = default;
 
     /**
      * Parameterized constructor using std::move for efficient data transfer.
@@ -64,21 +65,48 @@ public:
           remarks(std::move(remarks_)),
           transaction_status(std::move(transaction_status_)),
           transaction_at(std::move(transaction_at_)),
-          transaction_type(std::move(transaction_type_)) {
+          transaction_type(std::move(transaction_type_))
+    {
     }
-        // Getters
+    // Getters
 
-    int get_transaction_id() const { return transaction_id; }
-    const std::optional<int>& get_from_account() const { return from_account; }
-    const std::optional<int>& get_to_account() const { return to_account; }
-    int64_t get_transaction_amount() const { return transaction_amount; }
-    const std::string& get_receiver_name() const { return receiver_name; }
-    const std::string& get_receiver_mobile() const { return receiver_mobile; }
-    const std::string& get_remarks() const { return remarks; }
-    const std::string& get_transaction_status() const { return transaction_status; }
-    const std::string& get_transaction_at() const { return transaction_at; }
-    const std::string& get_transaction_type() const { return transaction_type; }
+    int get_transaction_id() const
+    {
+        return transaction_id;
+    }
+    const std::optional<int> &get_from_account() const
+    {
+        return from_account;
+    }
+    const std::optional<int> &get_to_account() const { return to_account; }
+    int64_t get_transaction_amount() const
+    {
+        return transaction_amount;
+    }
+    const std::string &get_receiver_name() const
+    {
+        return receiver_name;
+    }
+    const std::string &get_receiver_mobile() const
+    {
+        return receiver_mobile;
+    }
+    const std::string &get_remarks() const
+    {
+        return remarks;
+    }
+    const std::string &get_transaction_status() const
+    {
+        return transaction_status;
+    }
+    const std::string &get_transaction_at() const
+    {
+        return transaction_at;
+    }
+    const std::string &get_transaction_type() const
+    {
+        return transaction_type;
+    }
 };
-
 
 #endif

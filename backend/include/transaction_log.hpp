@@ -10,7 +10,7 @@
 
 class TransactionLog {
 private:
-    std::vector<Transaction> transactions_;
+    std::unordered_map<int ,Transaction> transactions_;
     mutable pthread_mutex_t mutex_;
     std::atomic<int> nextId_;
 
@@ -30,17 +30,10 @@ public:
 
     void record(TransactionType type, int accountId, long long amountCents, long long balanceAfterCents,std::optional<int> relatedAccountId = std::nullopt) 
     {
-        Transaction t;
-        t.transactionId = nextId_++;
-        t.type = type;
-        t.accountId = accountId;
-        t.relatedAccountId = relatedAccountId;
-        t.amountCents = amountCents;
-        t.balanceAfterCents = balanceAfterCents;
-        t.timestamp = time(nullptr);
+        Transaction t(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
 
         MutexGuard guard(mutex_);
-        transactions_.push_back(t);
+       transactions[transaction_id] = std::move(t);
     }
 
     std::vector<Transaction> getHistoryForAccount(int accountId) const

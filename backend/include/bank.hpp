@@ -56,7 +56,7 @@ public:
             return false;
         }
         acc->deposit(amountCents);
-        log_.record(TransactionType::DEPOSIT, accountId, amountCents, acc->getBalance());
+        log_.record(TransactionType::DEPOSIT, accountId, amountCents, acc->get_actual_balance());
         return true;
     }
 
@@ -69,7 +69,7 @@ public:
         if (!acc->withdraw(amountCents)) {
             return false;   // insufficient funds
         }
-        log_.record(TransactionType::WITHDRAWAL, accountId, amountCents, acc->getBalance());
+        log_.record(TransactionType::WITHDRAWAL, accountId, amountCents, acc->get_actual_balance());
         return true;
     }
 
@@ -79,7 +79,7 @@ public:
         {
             return false;
         }
-        outBalanceCents = acc->getBalance();
+        outBalanceCents = acc->get_actual_balance();
         return true;
     }
 

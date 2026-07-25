@@ -81,7 +81,7 @@ public:
                 return;
             }
 
-            bool enqueue_success = AuthenticationQueue.enqueue(parsed_msg.value());
+            bool enqueue_success = AuthenticationQueue.push(parsed_msg.value());
 
             if (!enqueue_success)
             {
@@ -139,7 +139,7 @@ public:
                 return;
             }
 
-            bool enqueue_success = TransactionQueue.enqueue(parsed_msg.value());
+            bool enqueue_success = TransactionQueue.push(parsed_msg.value());
             if (!enqueue_success)
             {
                 conn->send("SERVER_BUSY");

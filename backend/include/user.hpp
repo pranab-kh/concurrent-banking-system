@@ -60,19 +60,54 @@ public:
     {
     }
     // Getters
-int get_user_id() const { return user_id; }
-const std::string& get_full_name() const { return full_name; }
-const std::string& get_address() const { return address; }
-const std::string& get_mobile() const { return mobile; }
-const std::string& get_email() const { return email; }
-const std::string& get_gender() const { return gender; }
-const std::string& get_nid() const { return nid; }
-const std::string& get_password_hash() const { return password_hash; }
-const std::string& get_user_created_at() const { return user_created_at; }
-const std::string& get_user_updated_at() const { return user_updated_at; }
-const std::string& get_login_status() const { return login_status; }
-const std::unordered_map<int, Account>& get_accounts() const { return accounts; }
-
+    int get_user_id() const
+    {
+        return user_id;
+    }
+    const std::string &get_full_name() const
+    {
+        return full_name;
+    }
+    const std::string &get_address() const
+    {
+        return address;
+    }
+    const std::string &get_mobile() const
+    {
+        return mobile;
+    }
+    const std::string &get_email() const
+    {
+        return email;
+    }
+    const std::string &get_gender() const
+    {
+        return gender;
+    }
+    const std::string &get_nid() const
+    {
+        return nid;
+    }
+    const std::string &get_password_hash() const
+    {
+        return password_hash;
+    }
+    const std::string &get_user_created_at() const
+    {
+        return user_created_at;
+    }
+    const std::string &get_user_updated_at() const
+    {
+        return user_updated_at;
+    }
+    const std::string &get_login_status() const
+    {
+        return login_status;
+    }
+    const std::unordered_map<int, Account> &get_accounts() const
+    {
+        return accounts;
+    }
 };
 
 #endif
