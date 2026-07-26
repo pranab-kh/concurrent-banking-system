@@ -108,6 +108,11 @@ public:
     {
         return accounts;
     }
+     //Setters (make private and give access only to banking_engine)
+    void set_login(std::string &login)
+    {
+        login_status = login;
+    }
 };
 
 #endif

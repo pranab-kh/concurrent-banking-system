@@ -7,7 +7,7 @@
 struct LoginRequest
 {
     int user_id;
-    std::string password_hash;
+    std::string password;
 };
 
 struct AccountCreationRequest

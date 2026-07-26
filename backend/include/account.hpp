@@ -69,6 +69,7 @@ public:
     const std::string &get_account_updated_at() const { return account_updated_at; }
     const std::unordered_map<int, Transaction> &get_transactions() const { return transactions; }
 
+   
     pthread_mutex_t &getMutex()
     {
         return mutex_;
