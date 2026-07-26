@@ -3,13 +3,21 @@
 // #include"web_socket_controllers.hpp"
 #include <thread>
 #include "thread_distributor.hpp"
+#include "password_hash.hpp"
 
 
 
 int main()
 {
-    Thread_Distributor thread_divider;
-    thread_divider.display();
+    std::string password = "12345";
+    std::string check_password = "123456";
+    hash_password(password);
+    std::cout << password<<std::endl;
+    std::cout << verify_password(check_password,password) << std::endl;
+    
+
+    // Thread_Distributor thread_divider;
+    // thread_divider.display();
 
  
     // std::cout<<"Initializing the Universal Port Gateway..."<<std::endl;
