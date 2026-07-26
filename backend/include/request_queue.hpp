@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include "mutex_guard.hpp"
 
+#include<iostream> //temporarily for std::cout
 
 
 template <class T>
@@ -55,7 +56,7 @@ public:
     {
         if (head == -1)
         {
-            cout << "Queue is empty" << endl;
+            std::cout << "Queue is empty" << std::endl;
             return false;
         }
 
@@ -67,7 +68,7 @@ public:
         {
             head = (head + 1) % max;
         }
-        return true
+        return true;
     }
     void display()
     {
@@ -108,9 +109,11 @@ public:
 
     T* front()
     {
-        return &arr[head];
-        
-
+        if (head == -1) 
+        {
+            throw std::runtime_error("Queue is empty");
+        }
+        return arr[head];
     }
 
 };
@@ -169,6 +172,12 @@ public:
 
     
     bool pop(T& outReq) {
+
+        if (queue_.isEmpty()) 
+            {
+                return false;
+            }
+
         MutexGuard guard(mutex_);
         while (queue_.empty() && !shuttingDown_) {
             pthread_cond_wait(&notEmpty_, &mutex_);
