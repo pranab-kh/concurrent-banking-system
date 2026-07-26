@@ -2,18 +2,18 @@
 #define WORKER_POOL_HPP
 
 #include "request_queue.hpp"
+#include "response_queue.hpp"
 #include "bank.hpp"
 #include <pthread.h>
 #include <vector>
 template <class T>
 class WorkerPool {
 private:
-    RequestQueue<T>& queue_;
+    RequestQueue& queue_;
+    ResponseQueue& responseQueue_;
     Bank& bank_;
     std::vector<pthread_t> workers_;
     int numWorkers_;
-    std::atomic<bool> shuttingDown_;
-
 
     static void* workerLoop(void* arg) {
         WorkerPool* pool = static_cast<WorkerPool*>(arg);
@@ -24,13 +24,14 @@ private:
     void run() {
         TransactionRequest req;
         while (queue_.pop(req)) {
-            bank_.process(req);
+            TransactionResponse resp = bank_.process(req);
+            responseQueue_.push(resp);
         }
     }
 
 public:
-    WorkerPool(Bank& bank, RequestQueue& queue, int numWorkers = 4)
-        : bank_(bank), queue_(queue), numWorkers_(numWorkers), shuttingDown_(false)
+    WorkerPool(Bank& bank, RequestQueue& queue, ResponseQueue& responseQueue, int numWorkers = 4)
+        : bank_(bank), queue_(queue), responseQueue_(responseQueue), numWorkers_(numWorkers)
     {
         for (int i = 0; i < numWorkers_; i++) {
             pthread_t thread;

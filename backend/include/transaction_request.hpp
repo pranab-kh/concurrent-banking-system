@@ -14,13 +14,12 @@ struct AccountCreationRequest
 {
     
 };
-struct TransactionRequest
-{
-    std::optional<int> to_account;
-    int64_t transaction_amount;
-    std::string receiver_name;
-    std::string remarks; // only used for TRANSFER
-    std::string transaction_type;
+struct TransactionRequest {
+    TransactionType type;
+    int requestId; 
+    int accountId;
+    long long amountCents;
+    std::optional<int> relatedAccountId;   // only used for TRANSFER
 };
 
 #endif
