@@ -130,7 +130,7 @@ public:
             return false;
         }
         actual_balance -= amountCents;
-        available_balance += amountCents;
+        available_balance -= amountCents;
 
         return true;
     }

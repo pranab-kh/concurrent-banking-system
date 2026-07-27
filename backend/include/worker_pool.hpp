@@ -7,9 +7,10 @@
 #include <pthread.h>
 #include <vector>
 template <class T>
-class WorkerPool {
+
+class WorkerPool { 
 private:
-    RequestQueue& queue_;
+    RequestQueue& queue_; //templatized fixing required --#
     ResponseQueue& responseQueue_;
     Bank& bank_;
     std::vector<pthread_t> workers_;

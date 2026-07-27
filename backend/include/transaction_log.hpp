@@ -28,8 +28,10 @@ public:
     TransactionLog(const TransactionLog&) = delete;
     TransactionLog& operator=(const TransactionLog&) = delete;
 
+    //requires fixing -- ##
     void record(TransactionType type, int accountId, long long amountCents, long long balanceAfterCents,std::optional<int> relatedAccountId = std::nullopt) 
     {
+        //sort the parameters --#
         Transaction t(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
 
         MutexGuard guard(mutex_);

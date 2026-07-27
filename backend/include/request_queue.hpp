@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include "mutex_guard.hpp"
 
-#include<iostream> //temporarily for std::cout
+#include<iostream> 
 
 
 template <class T>
@@ -40,7 +40,7 @@ public:
 
         if ((tail + 1) % max == head )
         {
-            cout << "queue is full" << endl;
+            std::cout << "queue is full" << std::endl;
             return false;
         }
         if (head == -1)
@@ -49,7 +49,6 @@ public:
         }
         tail = (tail + 1) % max;
         arr[tail] = data;
-        // cout << arr [tail]<<"\t";
         return true;
     }
     bool pop()
@@ -75,23 +74,23 @@ public:
 
         if (head == -1)
         {
-            cout << "Queue empty" << endl;
+            std::cout << "Queue empty" << std::endl;
             return;
         }
 
         int i = head;
         while (true)
         {
-            cout << arr[i] << "\t";
+            std::cout << arr[i] << "\t";
             if (i == tail)
                 break; // stop after printing tail
             i = (i + 1) % max;
         }
-        cout << endl;
+        std::cout << std::endl;
     }
         bool isEmpty()
     {
-        if(head == -1 & tail == -1)
+        if(head == -1 && tail == -1)
         {
             return true;
         }
@@ -107,9 +106,9 @@ public:
         return false;
     }
 
-    T* front()
+    T& front()
     {
-        if (head == -1) 
+        if (head == -1)
         {
             throw std::runtime_error("Queue is empty");
         }
@@ -173,16 +172,12 @@ public:
     
     bool pop(T& outReq) {
 
-        if (queue_.isEmpty()) 
-            {
-                return false;
-            }
-
         MutexGuard guard(mutex_);
-        while (queue_.empty() && !shuttingDown_) {
+        while (queue_.isEmpty() && !shuttingDown_) {
             pthread_cond_wait(&notEmpty_, &mutex_);
         }
-        if (shuttingDown_ && queue_.empty()) {
+        if (queue_.isEmpty()) {
+            // this is reachable if shuttingDown_ is true and nothing is left to drain
             return false;
         }
         outReq = queue_.front();
