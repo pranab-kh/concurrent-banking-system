@@ -133,7 +133,28 @@ public:
 
     size_t size() const {
         return entryCount_.load();
-    }   
+    } 
+    
+    std::vector<std::pair<K, V>> getAll() const
+    {
+        std::vector<std::pair<K, V>> result;
+        for (size_t i = 0; i < buckets_.size(); ++i) {
+            MutexGuard guard(mutexes_[i]);
+            for (const auto& entry : buckets_[i]) {
+                result.push_back(entry);
+            }
+        }
+        return result;
+    }
+
+    void clear() 
+    {
+        for (size_t i = 0; i < buckets_.size(); ++i) {
+            MutexGuard guard(mutexes_[i]);
+            buckets_[i].clear();
+        }
+        entryCount_ = 0;
+    }
 
 private:
     size_t bucketIndex(const K& key) const {
