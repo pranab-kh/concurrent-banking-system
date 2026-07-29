@@ -40,6 +40,37 @@ public:
     HashTable(const HashTable&) = delete;
     HashTable& operator=(const HashTable&) = delete;
 
+    //move constructor
+    HashTable(HashTable&& other) noexcept
+        : buckets_(std::move(other.buckets_)),
+        mutexes_(buckets_.size()), //new mutexes
+        entryCount_(other.entryCount_.load())
+    {   
+        for (size_t i = 0; i < mutexes_.size(); ++i) {
+            pthread_mutex_init(&mutexes_[i], nullptr);
+        }
+        other.entryCount_ = 0;
+    }
+
+    HashTable& operator=(HashTable&& other) noexcept {
+        if (this == &other) return *this;
+
+        for (auto& m : mutexes_) {
+            pthread_mutex_destroy(&m);
+        }
+
+        buckets_ = std::move(other.buckets_);
+        mutexes_.resize(buckets_.size());
+        for (auto& m : mutexes_) {
+            pthread_mutex_init(&m, nullptr);
+        }
+        entryCount_ = other.entryCount_.load();
+        other.entryCount_ = 0;
+
+        return *this;
+    }
+
+
     void insert(const K& key, const V& value) 
     {
         size_t idx = bucketIndex(key);
