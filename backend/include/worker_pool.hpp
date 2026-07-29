@@ -8,6 +8,7 @@
 #include <vector>
 template <class T>
 
+//queue ko lagi thread allocate garera service garne --+
 class WorkerPool { 
 private:
     RequestQueue& queue_; //templatized fixing required --#

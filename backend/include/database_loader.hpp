@@ -7,10 +7,12 @@
 #include <pqxx/pqxx>
 #include <memory>
 #include "password_hash.hpp"
+#include "hashtable.hpp"
+
 class Load_DB
 {
 
-    std::unordered_map<int, User> bank_db;
+    HashTable<int, std::shared_ptr<User>> bank_db;
     std::unique_ptr<pqxx::connection> connect_database;
 
 public:
@@ -209,8 +211,8 @@ public:
 
     void store_users(pqxx::result &res)
     {
-        std::unordered_map<int, Transaction> transactions;
-        std::unordered_map<int, Account> accounts;
+        HashTable<int, std::shared_ptr<Transaction>> transactions;  
+        HashTable<int, std::shared_ptr<Account>> accounts;  
 
         for (int i = 1; i < res.size(); i++)
         {
@@ -235,8 +237,8 @@ public:
                 std::string receiver_name = res[i - 1]["receiver_name"].is_null() ? "" : res[i - 1]["receiver_name"].as<std::string>();
                 std::string receiver_mobile = res[i - 1]["receiver_mobile"].is_null() ? "" : res[i - 1]["receiver_mobile"].as<std::string>();
 
-                Transaction t(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
-                transactions[transaction_id] = std::move(t);
+                auto t = std::make_shared<Transaction>(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
+                transactions.insert(transaction_id, t);
             }
             if (!res[i - 1]["account_id"].is_null())
             {
@@ -253,8 +255,8 @@ public:
                     std::string account_created_at = res[i - 1]["account_created_at"].as<std::string>();
                     std::string account_updated_at = res[i - 1]["account_updated_at"].as<std::string>();
 
-                    Account a(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
-                    accounts[account_id] = std::move(a);
+                    auto a = std::make_shared<Account>(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
+                    accounts.insert(account_id, a);
                     transactions.clear();
                 }
             }
@@ -272,8 +274,8 @@ public:
                 std::string user_updated_at = res[i - 1]["user_updated_at"].as<std::string>();
                 std::string login_status = res[i - 1]["login_status"].as<std::string>();
 
-                User u(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
-                bank_db[user_id] = std::move(u);
+                auto u = std::make_shared<User>(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
+                bank_db.insert(user_id, u);
                 transactions.clear();
                 accounts.clear();
             }
@@ -301,8 +303,8 @@ public:
                     std::string receiver_name = res[last]["receiver_name"].is_null() ? "" : res[last]["receiver_name"].as<std::string>();
                     std::string receiver_mobile = res[last]["receiver_mobile"].is_null() ? "" : res[last]["receiver_mobile"].as<std::string>();
 
-                    Transaction t(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
-                    transactions[transaction_id] = std::move(t);
+                    auto t = std::make_shared<Transaction>(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
+                    transactions.insert(transaction_id, t);
                 }
 
                 // 2. Commit the final account structure to the map
@@ -318,8 +320,8 @@ public:
                     std::string account_created_at = res[last]["account_created_at"].as<std::string>();
                     std::string account_updated_at = res[last]["account_updated_at"].as<std::string>();
 
-                    Account a(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
-                    accounts[account_id] = std::move(a);
+                    auto a = std::make_shared<Account>(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
+                    accounts.insert(account_id, a);
                 }
 
                 // 3. Commit the final active user profile to your bank database
@@ -335,8 +337,8 @@ public:
                 std::string user_updated_at = res[last]["user_updated_at"].as<std::string>();
                 std::string login_status = res[last]["login_status"].as<std::string>();
 
-                User u(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
-                bank_db[user_id] = std::move(u);
+                auto u = std::make_shared<User>(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
+                bank_db.insert(user_id, u);
                 // 4. Memory flush
                 transactions.clear();
                 accounts.clear();

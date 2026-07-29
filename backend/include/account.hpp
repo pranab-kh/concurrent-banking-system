@@ -6,6 +6,7 @@
 #include <string>
 #include <stdexcept>
 #include "transaction.hpp"
+#include "hashtable.hpp"  
 
 class Account
 {
@@ -19,7 +20,7 @@ private:
     std::string account_type;
     std::string account_created_at;
     std::string account_updated_at;
-    std::unordered_map<int, Transaction> transactions;
+    HashTable<int, std::shared_ptr<Transaction>> transactions;   
     mutable pthread_mutex_t mutex_;
 
 public:
@@ -43,7 +44,7 @@ public:
             std::string account_type_,
             std::string account_created_at_,
             std::string account_updated_at_,
-            std::unordered_map<int, Transaction> transactions_)
+            HashTable<int, std::shared_ptr<Transaction>> transactions_) 
         : account_id(std::move(account_id_)),
           account_holder(std::move(account_holder_)),
           actual_balance(std::move(actual_balance_)),
@@ -53,7 +54,7 @@ public:
           account_type(std::move(account_type_)),
           account_created_at(std::move(account_created_at_)),
           account_updated_at(std::move(account_updated_at_)),
-          transactions(std::move(transactions_))
+          transactions(std::move(transactions_)) // this now uses hashtable's move constructor
     {
     }
 
@@ -67,7 +68,8 @@ public:
     const std::string &get_account_type() const { return account_type; }
     const std::string &get_account_created_at() const { return account_created_at; }
     const std::string &get_account_updated_at() const { return account_updated_at; }
-    const std::unordered_map<int, Transaction> &get_transactions() const { return transactions; }
+    //revisit after getAll -- #
+    const HashTable<int, std::shared_ptr<Transaction>>& get_transactions() const { return transactions; }
 
    
     pthread_mutex_t &getMutex()

@@ -8,6 +8,7 @@
 #include <cmath>
 #include "account.hpp"
 #include "transaction.hpp"
+#include "hashtable.hpp"
 
 class User
 {
@@ -24,7 +25,7 @@ private:
     std::string user_created_at;
     std::string user_updated_at;
     std::string login_status;
-    std::unordered_map<int, Account> accounts;
+    HashTable<int, std::shared_ptr<Account>> accounts;
 
 public:
     User() = default;
@@ -44,7 +45,7 @@ public:
          std::string user_created_at_,
          std::string user_updated_at_,
          std::string login_status_,
-         std::unordered_map<int, Account> accounts_)
+         HashTable<int, std::shared_ptr<Account>> accounts_ )
         : user_id(std::move(user_id_)),
           full_name(std::move(full_name_)),
           address(std::move(address_)),
