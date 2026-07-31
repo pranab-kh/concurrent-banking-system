@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ConcurrentBankingSystem CXX)
+project(ConcurrentBankingSystem CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +10,13 @@ pkg_check_modules(LIBPQXX REQUIRED libpqxx)
 
 include_directories(backend/include)
 
-add_executable(bank_main backend/src/main.cpp)
+add_executable(bank_main
+    backend/src/main.cpp
+    backend/src/bcrypt.c
+    backend/src/crypt_blowfish.c
+    backend/src/crypt_gensalt.c
+    backend/src/wrapper.c
+)
 
 target_include_directories(bank_main PRIVATE ${LIBPQXX_INCLUDE_DIRS})
 target_link_libraries(bank_main PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq)
