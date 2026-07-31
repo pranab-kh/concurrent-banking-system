@@ -2,61 +2,80 @@
 #define TRANSACTION_LOG_HPP
 
 #include "transaction.hpp"
-#include "mutex_guard.hpp"
-#include <pthread.h>
+#include "hashtable.hpp"
 #include <vector>
 #include <atomic>
-#include <ctime>
+#include <memory>
+#include <optional>
+#include <string>
 
 class TransactionLog {
 private:
-    std::unordered_map<int ,Transaction> transactions_;
-    mutable pthread_mutex_t mutex_;
+    HashTable<int, std::shared_ptr<Transaction>> transactions_;
     std::atomic<int> nextId_;
 
 public:
-    TransactionLog() : nextId_(0) {
-        if (pthread_mutex_init(&mutex_, nullptr) != 0) {
-            throw std::runtime_error("Failed to initialize transaction log mutex");
-        }
-    }
+    TransactionLog() : nextId_(0) {}
 
-    ~TransactionLog() {
-        pthread_mutex_destroy(&mutex_);
-    }
+    ~TransactionLog() = default;
 
     TransactionLog(const TransactionLog&) = delete;
     TransactionLog& operator=(const TransactionLog&) = delete;
 
-    //requires fixing -- ##
-    void record(TransactionType type, int accountId, long long amountCents, long long balanceAfterCents,std::optional<int> relatedAccountId = std::nullopt) 
+    void record(TransactionType type, int accountId, long long amountCents, long long balanceAfterCents,
+                std::optional<int> relatedAccountId = std::nullopt)
     {
-        //sort the parameters --#
-        Transaction t(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
+        int id = nextId_++;
 
-        MutexGuard guard(mutex_);
-       transactions[transaction_id] = std::move(t);
+        std::optional<int> fromAcc =
+            (type == TransactionType::WITHDRAWAL || type == TransactionType::TRANSFER_OUT)
+                ? std::optional<int>(accountId) : std::nullopt;
+
+        std::optional<int> toAcc =
+            (type == TransactionType::DEPOSIT || type == TransactionType::TRANSFER_IN)
+                ? std::optional<int>(accountId) : std::nullopt;
+
+        if (type == TransactionType::TRANSFER_OUT) toAcc = relatedAccountId;
+        if (type == TransactionType::TRANSFER_IN)   fromAcc = relatedAccountId;
+
+        std::string typeStr;
+        switch (type) {
+            case TransactionType::DEPOSIT:      typeStr = "DEPOSIT"; break;
+            case TransactionType::WITHDRAWAL:   typeStr = "WITHDRAWAL"; break;
+            case TransactionType::TRANSFER_IN:  typeStr = "TRANSFER_IN"; break;
+            case TransactionType::TRANSFER_OUT: typeStr = "TRANSFER_OUT"; break;
+        }
+
+        auto t = std::make_shared<Transaction>(
+            id, fromAcc, toAcc, amountCents,
+            "", "", "", "SUCCESS", "", typeStr
+            // parameters left "" for now -- need to devide
+        );
+
+        transactions_.insert(id, t);
     }
 
-    std::vector<Transaction> getHistoryForAccount(int accountId) const
+    std::vector<std::shared_ptr<Transaction>> getHistoryForAccount(int accountId) const
     {
-        MutexGuard guard(mutex_);
-
-        std::vector<Transaction> result;
-        for (const auto& t : transactions_) {
-            if (t.accountId == accountId) {
+        std::vector<std::shared_ptr<Transaction>> result;
+        for (const auto& [id, t] : transactions_.getAll()) {
+            bool matchesFrom = t->get_from_account().has_value() && t->get_from_account().value() == accountId;
+            bool matchesTo   = t->get_to_account().has_value()   && t->get_to_account().value()   == accountId;
+            if (matchesFrom || matchesTo) {
                 result.push_back(t);
             }
         }
         return result;
     }
 
-    std::vector<Transaction> getAllTransactions() const
+    std::vector<std::shared_ptr<Transaction>> getAllTransactions() const
     {
-        MutexGuard guard(mutex_);
-        return transactions_;
+        std::vector<std::shared_ptr<Transaction>> result;
+        for (const auto& [id, t] : transactions_.getAll()) {
+            result.push_back(t);
+        }
+        return result;
     }
-
 };
 
 #endif
