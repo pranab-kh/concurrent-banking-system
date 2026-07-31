@@ -266,7 +266,7 @@ public:
 
                     auto a = std::make_shared<Account>(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
                     accounts.insert(account_id, a);
-                    transactions.clear();
+                    transactions = HashTable<int, std::shared_ptr<Transaction>>();
                 }
             }
             if (res[i - 1]["user_id"] != res[i]["user_id"])
@@ -285,8 +285,8 @@ public:
 
                 auto u = std::make_shared<User>(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
                 bank_db.insert(user_id, u);
-                transactions.clear();
-                accounts.clear();
+                transactions = HashTable<int, std::shared_ptr<Transaction>>();
+                accounts = HashTable<int, std::shared_ptr<Account>>();
             }
         }
 
@@ -349,8 +349,8 @@ public:
                 auto u = std::make_shared<User>(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
                 bank_db.insert(user_id, u);
                 // 4. Memory flush
-                transactions.clear();
-                accounts.clear();
+                transactions = HashTable<int, std::shared_ptr<Transaction>>();
+                accounts = HashTable<int, std::shared_ptr<Account>>();
             }
         }
     }
