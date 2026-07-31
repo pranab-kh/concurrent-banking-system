@@ -64,7 +64,7 @@ public:
     HashTable<int, std::shared_ptr<Account>>& getAccountsRef() {
         return accounts;
     }
-    
+
     int get_user_id() const
     {
         return user_id;
@@ -109,10 +109,12 @@ public:
     {
         return login_status;
     }
-    const std::unordered_map<int, Account> &get_accounts() const
+
+    const HashTable<int, std::shared_ptr<Account>>& get_accounts() const
     {
         return accounts;
     }
+    
      //Setters (make private and give access only to banking_engine)
     void set_login(std::string &login)
     {
