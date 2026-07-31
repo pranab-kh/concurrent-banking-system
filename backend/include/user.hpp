@@ -60,7 +60,11 @@ public:
           accounts(std::move(accounts_))
     {
     }
-    // Getters
+    //getter
+    HashTable<int, std::shared_ptr<Account>>& getAccountsRef() {
+        return accounts;
+    }
+    
     int get_user_id() const
     {
         return user_id;

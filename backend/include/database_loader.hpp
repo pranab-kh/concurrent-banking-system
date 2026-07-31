@@ -62,6 +62,11 @@ public:
         }
     }
 
+    //getter
+    HashTable<int, std::shared_ptr<User>>& getBankDb() {
+        return bank_db;
+    }
+
     void display()
     {
 
