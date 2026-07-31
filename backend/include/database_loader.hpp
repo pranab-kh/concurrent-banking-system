@@ -67,55 +67,56 @@ public:
         return bank_db;
     }
 
+
     void display()
     {
-
         std::cout << std::left;
         std::cout << std::setw(10) << "UserID"
-                  << std::setw(20) << "Name"
-                  << std::setw(12) << "AcctID"
-                  << std::setw(14) << "Balance"
-                  << std::setw(14) << "Status"
-                  << std::setw(10) << "TxnID"
-                  << std::setw(14) << "Amount"
-                  << std::setw(18) << "Receiver"
-                  << std::setw(20) << "Remarks"
-                  << std::setw(22) << "Time"
-                  << std::setw(14) << "Type"
-                  << std::endl;
+                << std::setw(20) << "Name"
+                << std::setw(12) << "AcctID"
+                << std::setw(14) << "Balance"
+                << std::setw(14) << "Status"
+                << std::setw(10) << "TxnID"
+                << std::setw(14) << "Amount"
+                << std::setw(18) << "Receiver"
+                << std::setw(20) << "Remarks"
+                << std::setw(22) << "Time"
+                << std::setw(14) << "Type"
+                << std::endl;
 
         std::cout << std::string(140, '-') << std::endl;
 
-        for (const auto &[u_id, u_data] : bank_db)
+        for (const auto &[u_id, u_data] : bank_db.getAll())
         {
-            for (const auto &[a_id, a_data] : u_data.get_accounts())
+            for (const auto &[a_id, a_data] : u_data->get_accounts().getAll())
             {
-                if (a_data.get_transactions().empty())
+                auto txns = a_data->get_transactions().getAll();
+                if (txns.empty())
                 {
-                    std::cout << std::setw(10) << u_data.get_user_id()
-                              << std::setw(20) << u_data.get_full_name()
-                              << std::setw(12) << a_data.get_account_id()
-                              << std::setw(14) << a_data.get_actual_balance()
-                              << std::setw(14) << a_data.get_account_status()
-                              << "(no transactions)"
-                              << std::endl;
+                    std::cout << std::setw(10) << u_data->get_user_id()
+                            << std::setw(20) << u_data->get_full_name()
+                            << std::setw(12) << a_data->get_account_id()
+                            << std::setw(14) << a_data->get_actual_balance()
+                            << std::setw(14) << a_data->get_account_status()
+                            << "(no transactions)"
+                            << std::endl;
                     continue;
                 }
 
-                for (const auto &[t_id, transaction] : a_data.get_transactions())
+                for (const auto &[t_id, transaction] : txns)
                 {
-                    std::cout << std::setw(10) << u_data.get_user_id()
-                              << std::setw(20) << u_data.get_full_name()
-                              << std::setw(12) << a_data.get_account_id()
-                              << std::setw(14) << a_data.get_actual_balance()
-                              << std::setw(14) << a_data.get_account_status()
-                              << std::setw(10) << transaction.get_transaction_id()
-                              << std::setw(14) << transaction.get_transaction_amount()
-                              << std::setw(18) << transaction.get_receiver_name()
-                              << std::setw(20) << transaction.get_remarks()
-                              << std::setw(22) << transaction.get_transaction_at()
-                              << std::setw(14) << transaction.get_transaction_type()
-                              << std::endl;
+                    std::cout << std::setw(10) << u_data->get_user_id()
+                            << std::setw(20) << u_data->get_full_name()
+                            << std::setw(12) << a_data->get_account_id()
+                            << std::setw(14) << a_data->get_actual_balance()
+                            << std::setw(14) << a_data->get_account_status()
+                            << std::setw(10) << transaction->get_transaction_id()
+                            << std::setw(14) << transaction->get_transaction_amount()
+                            << std::setw(18) << transaction->get_receiver_name()
+                            << std::setw(20) << transaction->get_remarks()
+                            << std::setw(22) << transaction->get_transaction_at()
+                            << std::setw(14) << transaction->get_transaction_type()
+                            << std::endl;
                 }
             }
         }
@@ -144,21 +145,21 @@ public:
     {
         try
         {
-            if (!connect_database)
-            {
+            if (!connect_database) {
                 establish_connection();
             }
-
-            if (!connect_database)
-            {
+            if (!connect_database) {
                 std::cerr << "Couldn't connect to database" << std::endl;
                 return;
             }
 
             std::string hashed_password;
+            std::shared_ptr<User> existingUser;
+            bool userAlreadyLoaded = bank_db.find(l.user_id, existingUser);
+
             pqxx::work login(*connect_database);
 
-            if (bank_db.find(l.user_id) == bank_db.end())
+            if (!userAlreadyLoaded)
             {
                 std::string query1 =
                     "SELECT u.password_hash FROM User_Table u WHERE u.user_id = ($1);";
@@ -172,7 +173,7 @@ public:
             }
             else
             {
-                hashed_password = bank_db[l.user_id].get_password_hash();
+                hashed_password = existingUser->get_password_hash();
             }
 
             bool verified = verify_password(l.password, hashed_password);
@@ -181,16 +182,16 @@ public:
                 std::cerr << "Invalid username of password" << std::endl;
                 return;
             }
-            std::string status = "ONLINE";
 
+            std::string status = "ONLINE";
             std::string update_db =
                 "UPDATE User_Table SET Login_Status = $1 WHERE User_Id = $2;";
             login.exec_params(update_db, status, l.user_id);
             login.commit();
-            if (bank_db.find(l.user_id) == bank_db.end())
-            {
-            pqxx::nontransaction read(*connect_database);
 
+            if (!userAlreadyLoaded)
+            {
+                pqxx::nontransaction read(*connect_database);
                 std::string query2 =
                     "SELECT u.user_id,u.full_name,u.address,u.mobile,u.email,u.gender,u.nid,u.password_hash,u.user_created_at,u.user_updated_at,u.login_status,"
                     "a.account_id,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
@@ -204,8 +205,11 @@ public:
                 pqxx::result res = read.exec_params(query2, l.user_id);
                 store_users(res);
             }
-            // add mutex here while updating 
-            bank_db[l.user_id].set_login(status);
+
+            std::shared_ptr<User> u;
+            if (bank_db.find(l.user_id, u)) {
+                u->set_login(status);
+            }
         }
         catch (std::exception &e)
         {
@@ -213,7 +217,7 @@ public:
             return;
         }
     }
-
+    
     void store_users(pqxx::result &res)
     {
         HashTable<int, std::shared_ptr<Transaction>> transactions;  
