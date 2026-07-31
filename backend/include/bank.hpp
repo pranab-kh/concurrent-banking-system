@@ -2,127 +2,77 @@
 #define BANK_HPP
 
 #include "hashtable.hpp"
-#include "account.hpp"
+#include "database_loader.hpp"
 #include "transaction_log.hpp"
 #include "transaction_request.hpp"
 #include "response_queue.hpp"
-
 #include <memory>
 #include <string>
 #include <vector>
 
 class Bank {
-public:
-    Bank() = default;
-    ~Bank() = default;
-
-    Bank(const Bank&) = delete;
-    Bank& operator=(const Bank&) = delete;
-    
-
 private:
-    HashTable<int, std::shared_ptr<Account>> accounts_;
+    Load_DB& db_;
+    HashTable<int, int> accountIdToUserId_;   // secondary index accountId -> userId
     TransactionLog log_;
 
+    bool findAccount(int accountId, std::shared_ptr<Account>& outAcc) {
+        int userId;
+        if (!accountIdToUserId_.find(accountId, userId)) return false;
+
+        std::shared_ptr<User> user;
+        if (!db_.getBankDb().find(userId, user)) return false;
+
+        return user->getAccountsRef().find(accountId, outAcc);
+    }
+
 public:
-    bool createAccount(int accountId, const std::string& ownerName, long long initialBalanceCents = 0) 
-    {
-        if (accounts_.contains(accountId)) {
-            return false;
+    explicit Bank(Load_DB& db) : db_(db) {
+        for (auto& [userId, user] : db_.getBankDb().getAll()) {
+            for (auto& [accountId, acc] : user->getAccountsRef().getAll()) {
+                accountIdToUserId_.insert(accountId, userId);
+            }
         }
-
-        auto acc = std::make_shared<Account>(accountId, ownerName, initialBalanceCents);
-        accounts_.insert(accountId, acc);
-        return true;
     }
 
-    TransactionResponse process(const TransactionRequest& req) {
-        TransactionResponse resp;
-        resp.requestId = req.requestId;
+    ~Bank() = default;
+    Bank(const Bank&) = delete;
+    Bank& operator=(const Bank&) = delete;
 
-        switch (req.type) {
-            case TransactionType::DEPOSIT: {
-                resp.success = deposit(req.accountId, req.amountCents);
-                resp.message = resp.success ? "OK" : "Account not found";
-                break;
-            }
-            case TransactionType::WITHDRAWAL: {
-                resp.success = withdraw(req.accountId, req.amountCents);
-                resp.message = resp.success ? "OK" : "Insufficient funds or account not found";
-                break;
-            }
-            case TransactionType::TRANSFER_OUT: {
-                if (!req.relatedAccountId.has_value()) {
-                    resp.success = false;
-                    resp.message = "Missing destination account";
-                    break;
-                }
-                resp.success = transfer(req.accountId, req.relatedAccountId.value(), req.amountCents);
-                resp.message = resp.success ? "OK" : "Transfer failed";
-                break;
-            }
-            default:
-                resp.success = false;
-                resp.message = "Unknown request type";
-        }
-
-        long long bal;
-        resp.newBalanceCents = getBalance(req.accountId, bal) ? bal : 0;
-        return resp;
-    }
-
-    bool deposit(int accountId, long long amountCents) 
-    {
+    bool deposit(int accountId, long long amountCents) {
         std::shared_ptr<Account> acc;
-        if (!accounts_.find(accountId, acc)) {
-            return false;
-        }
+        if (!findAccount(accountId, acc)) return false;
         acc->deposit(amountCents);
         log_.record(TransactionType::DEPOSIT, accountId, amountCents, acc->get_actual_balance());
         return true;
     }
 
-    bool withdraw(int accountId, long long amountCents) 
-    {
+    bool withdraw(int accountId, long long amountCents) {
         std::shared_ptr<Account> acc;
-        if (!accounts_.find(accountId, acc)) {
-            return false;
-        }
-        if (!acc->withdraw(amountCents)) {
-            return false;   // insufficient funds
-        }
+        if (!findAccount(accountId, acc)) return false;
+        if (!acc->withdraw(amountCents)) return false;
         log_.record(TransactionType::WITHDRAWAL, accountId, amountCents, acc->get_actual_balance());
         return true;
     }
 
     bool getBalance(int accountId, long long& outBalanceCents) {
         std::shared_ptr<Account> acc;
-        if (!accounts_.find(accountId, acc)) 
-        {
-            return false;
-        }
+        if (!findAccount(accountId, acc)) return false;
         outBalanceCents = acc->get_actual_balance();
         return true;
     }
 
-    bool accountExists(int accountId) 
-    {
-        return accounts_.contains(accountId);
-    }
-
-    std::vector<Transaction> getTransactionHistory(int accountId) const 
-    {
-        return log_.getHistoryForAccount(accountId);
+    bool accountExists(int accountId) {
+        return accountIdToUserId_.contains(accountId);
     }
 
     bool transfer(int fromId, int toId, long long amountCents) {
         if (amountCents <= 0 || fromId == toId) return false;
 
         std::shared_ptr<Account> from, to;
-        if (!accounts_.find(fromId, from)) return false;
-        if (!accounts_.find(toId, to)) return false;
+        if (!findAccount(fromId, from)) return false;
+        if (!findAccount(toId, to)) return false;
 
-        // Lock in consistent order: lower account ID first
         Account* first  = (fromId < toId) ? from.get() : to.get();
         Account* second = (fromId < toId) ? to.get()   : from.get();
 
@@ -148,6 +98,38 @@ public:
         }
 
         return success;
+    }
+
+    TransactionResponse process(const TransactionRequest& req) {
+        TransactionResponse resp;
+        resp.requestId = req.requestId;
+
+        switch (req.type) {
+            case TransactionType::DEPOSIT:
+                resp.success = deposit(req.accountId, req.amountCents);
+                resp.message = resp.success ? "OK" : "Account not found";
+                break;
+            case TransactionType::WITHDRAWAL:
+                resp.success = withdraw(req.accountId, req.amountCents);
+                resp.message = resp.success ? "OK" : "Insufficient funds or account not found";
+                break;
+            case TransactionType::TRANSFER_OUT:
+                if (!req.relatedAccountId.has_value()) {
+                    resp.success = false;
+                    resp.message = "Missing destination account";
+                    break;
+                }
+                resp.success = transfer(req.accountId, req.relatedAccountId.value(), req.amountCents);
+                resp.message = resp.success ? "OK" : "Transfer failed";
+                break;
+            default:
+                resp.success = false;
+                resp.message = "Unknown request type";
+        }
+
+        long long bal;
+        resp.newBalanceCents = getBalance(req.accountId, bal) ? bal : 0;
+        return resp;
     }
 };
 
