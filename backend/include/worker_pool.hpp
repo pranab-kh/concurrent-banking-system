@@ -65,43 +65,45 @@ public:
     bool pop(JobType homeType, Job& outJob) {
         MutexGuard guard(mutex_);
 
+        // sleep efficiently while both queues are empt and not shutting down
         while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && !shuttingDown_) {
             pthread_cond_wait(&notEmpty_, &mutex_);
         }
 
+        //wake up for shutdown
         if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty()) {
             return false;
         }
 
         if (homeType == JobType::LOGIN) {
-            if (!loginQueue_.isEmpty()) {
+            if (!loginQueue_.isEmpty()) { //takes from it's own login queue first if available
                 outJob.type = JobType::LOGIN;
-                outJob.loginReq = *loginQueue_.front();
+                outJob.loginReq = loginQueue_.front();
                 loginQueue_.pop();
                 return true;
             }
-            if (!transactionQueue_.isEmpty()) {
+            if (!transactionQueue_.isEmpty()) { //else checks for transaction queue
                 outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = *transactionQueue_.front();
+                outJob.txnReq = transactionQueue_.front();
                 transactionQueue_.pop();
                 return true;
             }
-        } else {
+        } else { // case for homeType == JobType::TRANSACTION
             if (!transactionQueue_.isEmpty()) {
                 outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = *transactionQueue_.front();
+                outJob.txnReq = transactionQueue_.front();
                 transactionQueue_.pop();
                 return true;
             }
             if (!loginQueue_.isEmpty()) {
                 outJob.type = JobType::LOGIN;
-                outJob.loginReq = *loginQueue_.front();
+                outJob.loginReq = loginQueue_.front();
                 loginQueue_.pop();
                 return true;
             }
         }
 
-        return pop(homeType, outJob);
+        return pop(homeType, outJob); // handles behaviour under concurrency
     }
 
     void shutdown() {
@@ -119,21 +121,28 @@ private:
     ResponseQueue& responseQueue_;
     std::vector<pthread_t> workers_;
 
+    /*
+    pthread_create only accepts one void* argument but each thread needs to know both which worker pool it belongs to and its home type
+    ThreadArgs bundles both into one heap-allocated object
+    */
     struct ThreadArgs {
         WorkerPool* pool;
         JobType homeType;
     };
 
-    static void* workerLoop(void* arg) {
+    static void* workerLoop(void* arg) //same signature required by pthread_create
+    {
         ThreadArgs* args = static_cast<ThreadArgs*>(arg);
         WorkerPool* pool = args->pool;
         JobType homeType = args->homeType;
         delete args;
-        pool->run(homeType);
+        pool->run(homeType); //hands over control to main worker pool logic
         return nullptr;
     }
 
-    void run(JobType homeType) {
+    //main loop
+    void run(JobType homeType) 
+    {
         Job job;
         while (hub_.pop(homeType, job)) {
             if (job.type == JobType::LOGIN) {
@@ -178,8 +187,9 @@ public:
         }
     }
 
+    //deleting copy operations
     WorkerPool(const WorkerPool&) = delete;
     WorkerPool& operator=(const WorkerPool&) = delete;
 };
 
-#endif // WORKER_POOL_HPP
+#endif
