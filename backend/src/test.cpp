@@ -28,7 +28,7 @@ create.connection = nullptr;
 
 
 AccountCreationRequest create1;
-create1.user_id=4;
+create1.user_id=1;
 create1.full_name = "Spider Man";
 create1.address = "New York";
 create1.mobile = "123456789";
@@ -39,11 +39,50 @@ create1.account_type = "SAVING";
 create1.password = "spiderman";
 create1.connection = nullptr;
 
+TransactionRequest deposit,withdraw,withdraw2,transfer;
+
+deposit.account_id = 1;
+deposit.transaction_type = "DEPOSIT";
+deposit.transaction_amount = 50000;
+deposit.remarks = "deposit of 50000";
+deposit.connection = nullptr;
+
+withdraw.account_id = 1;
+withdraw.transaction_type = "WITHDRAW";
+withdraw.transaction_amount = 500000;
+withdraw.remarks = "withdraw of 500000";
+withdraw.connection = nullptr;
+
+withdraw2.account_id = 1;
+withdraw2.transaction_type = "WITHDRAW";
+withdraw2.transaction_amount = 5000;
+withdraw2.remarks = "withdraw of 5000";
+withdraw2.connection = nullptr;
+
+transfer.account_id = 1;
+transfer.transaction_type = "TRANSFER";
+transfer.transaction_amount = 5000;
+transfer.remarks = "transfer of 5000";
+transfer.to_account=2;
+transfer.from_account=1;
+transfer.connection = nullptr;
+
+
+
+
 
 Load_DB load;
 
+load.create_account(create);
 load.create_account(create1);
 
+load.transaction(deposit);
+load.transaction(withdraw);
+load.transaction(withdraw2);
+load.transaction(transfer);
+
+Load_DB a;
+a.display();
 
 
 

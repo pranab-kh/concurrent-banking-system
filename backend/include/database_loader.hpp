@@ -238,7 +238,7 @@ public:
             {
                 std::cerr << "Couldn't connect to database" << std::endl;
                 if (a.connection)
-                a.connection->send("Couldn't connect to database");
+                    a.connection->send("Couldn't connect to database");
                 return;
             }
             std::shared_ptr<User> loaded_user;
@@ -266,13 +266,14 @@ public:
                         user_exist = true;
                         std::string password_hash = res[0]["password_hash"].as<std::string>();
                         verified = verify_password(a.password, password_hash);
+                        std::cout << "password matched" << std::endl;
                     }
                 }
                 if (!user_exist)
                 {
                     std::cerr << "Invalid username or password" << std::endl;
                     if (a.connection)
-                    a.connection->send("Invalid username or password");
+                        a.connection->send("Invalid username or password");
                     return;
                 }
 
@@ -280,7 +281,7 @@ public:
                 {
                     std::cerr << "Invalid username or password" << std::endl;
                     if (a.connection)
-                    a.connection->send("Invalid username or password");
+                        a.connection->send("Invalid username or password");
                     return;
                 }
             }
@@ -291,7 +292,7 @@ public:
                 {
                     std::cerr << "Password Hashing Failed" << std::endl;
                     if (a.connection)
-                    a.connection->send("Error");
+                        a.connection->send("Error");
                     return;
                 }
                 std::string query =
@@ -304,7 +305,7 @@ public:
                 {
                     std::cerr << "Error creating user" << std::endl;
                     if (a.connection)
-                    a.connection->send("Error creating user");
+                        a.connection->send("Error creating user");
                     return;
                 }
                 a.user_id = res[0]["user_id"].as<int>();
@@ -315,144 +316,159 @@ public:
                 "VALUES($1,$2,$3);";
 
             auto result = user.exec_params(query3, a.user_id, a.full_name, a.account_type);
-            if(result.affected_rows()==0)
+            if (result.affected_rows() == 0)
             {
                 std::cerr << "Failed to insert account record" << std::endl;
                 if (a.connection)
-            a.connection->send("Account creation failed");
-            return;
+                    a.connection->send("Account creation failed");
+                return;
             }
 
             user.commit();
             if (a.connection)
-            a.connection->send("Success");
+                a.connection->send("Success");
         }
         catch (std::exception &e)
         {
             std::cerr << "ERROR" << std::endl;
             if (a.connection)
-            a.connection->send("ERROR");
+                a.connection->send("ERROR");
 
             return;
         }
     }
 
-   void transaction(TransactionRequest &t)
-{
-    try
+    void transaction(TransactionRequest &t)
     {
-        if (!connect_database->is_open()) { establish_connection(); }
-        if (!connect_database->is_open())
+        try
         {
-            std::cerr << "Couldn't connect to database" << std::endl;
-            t.connection->send("Connection Error DB");
-            return;
-        }
-        
-        // Open transaction block. Destructor will handle rollback automatically if we early return.
-        pqxx::work transactions(*connect_database);
-
-        if (t.transaction_type == "WITHDRAW")
-        {
-           
-            std::string withdraw =
-                "UPDATE Account_Table "
-                "SET actual_balance = actual_balance - $1, "
-                "    available_balance = available_balance - $1 "
-                "WHERE account_id = $2 AND available_balance >= $1;";
-
-            std::string transaction_log =
-                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
-                "VALUES ($1, $2, $3, $4);";
-
-            auto result = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
-            if (result.affected_rows() == 0)
+            if (!connect_database->is_open())
             {
-                t.connection->send("Transaction Failed: Insufficient funds or invalid account");
+                establish_connection();
+            }
+            if (!connect_database->is_open())
+            {
+                std::cerr << "Couldn't connect to database" << std::endl;
+                if (t.connection)
+                    t.connection->send("Connection Error DB");
                 return;
             }
 
-            transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
-            transactions.commit();
-            t.connection->send("SUCCESS");
-            // update cache here
-        }
-        else if (t.transaction_type == "DEPOSIT")
-        {
-            
-            std::string deposit =
-                "UPDATE Account_Table "
-                "SET actual_balance = actual_balance + $1, "
-                "    available_balance = available_balance + $1 "
-                "WHERE account_id = $2;";
+            // Open transaction block. Destructor will handle rollback automatically if we early return.
+            pqxx::work transactions(*connect_database);
 
-            std::string transaction_log =
-                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
-                "VALUES ($1, $2, $3, $4);";
-
-            auto result = transactions.exec_params(deposit, t.transaction_amount, t.account_id);
-            if (result.affected_rows() == 0)
+            if (t.transaction_type == "WITHDRAW")
             {
-                t.connection->send("Transaction Failed: Account not found");
-                return; 
-            }
 
-            transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
-            transactions.commit();
-            t.connection->send("SUCCESS");
-            // update cache here
+                std::string withdraw =
+                    "UPDATE Account_Table "
+                    "SET actual_balance = actual_balance - $1, "
+                    "    available_balance = available_balance - $1 "
+                    "WHERE account_id = $2 AND available_balance >= $1;";
+
+                std::string transaction_log =
+                    "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
+                    "VALUES ($1, $2, $3, $4);";
+
+                auto result = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
+                if (result.affected_rows() == 0)
+                {
+                    std::cerr<<"Transaction Failed: Insufficient funds or invalid account"<<std::endl;
+                    if (t.connection)
+                        t.connection->send("Transaction Failed: Insufficient funds or invalid account");
+                    return;
+                }
+
+                transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
+                transactions.commit();
+                if (t.connection)
+                    t.connection->send("SUCCESS");
+                // update cache here
+            }
+            else if (t.transaction_type == "DEPOSIT")
+            {
+
+                std::string deposit =
+                    "UPDATE Account_Table "
+                    "SET actual_balance = actual_balance + $1, "
+                    "    available_balance = available_balance + $1 "
+                    "WHERE account_id = $2;";
+
+                std::string transaction_log =
+                    "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
+                    "VALUES ($1, $2, $3, $4);";
+
+                auto result = transactions.exec_params(deposit, t.transaction_amount, t.account_id);
+                if (result.affected_rows() == 0)
+                {
+                    if (t.connection)
+                        t.connection->send("Transaction Failed: Account not found");
+                    return;
+                }
+
+                transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
+                transactions.commit();
+                if (t.connection)
+                    t.connection->send("SUCCESS");
+                // update cache here
+            }
+            else if (t.transaction_type == "TRANSFER")
+            {
+                std::string withdraw =
+                    "UPDATE Account_Table "
+                    "SET actual_balance = actual_balance - $1, "
+                    "    available_balance = available_balance - $1 "
+                    "WHERE account_id = $2 AND available_balance >= $1;";
+
+                std::string deposit =
+                    "UPDATE Account_Table "
+                    "SET actual_balance = actual_balance + $1, "
+                    "    available_balance = available_balance + $1 "
+                    "WHERE account_id = $2;";
+
+                std::string transaction_log_from =
+                    "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, to_account) "
+                    "VALUES ($1, $2, $3, $4, $5);";
+
+                std::string transaction_log_to =
+                    "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, from_account) "
+                    "VALUES ($1, $2, $3, $4, $5);";
+
+                // Step 1: Withdraw money from the sender
+                auto result_1 = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
+                if (result_1.affected_rows() == 0)
+                {
+                    if (t.connection)
+                        t.connection->send("Transfer Failed: Insufficient funds or sender missing");
+                    return;
+                }
+
+                // Step 2: Deposit money to target recipient (Fixed target to t.to_account)
+                auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
+                if (result_2.affected_rows() == 0)
+                {
+                    if (t.connection)
+                        t.connection->send("Transfer Failed: Recipient account missing");
+                    return; // Auto-rollback triggers on exit, completely reversing the withdrawal!
+                }
+
+                // Step 3: Write out matching audit log ledger entries
+                transactions.exec_params(transaction_log_from, t.account_id, t.transaction_type, t.transaction_amount, t.remarks, t.to_account);
+                transactions.exec_params(transaction_log_to, t.to_account, t.transaction_type, t.transaction_amount, t.remarks, t.account_id);
+
+                transactions.commit();
+                if (t.connection)
+                    t.connection->send("SUCCESS");
+                // update cache here
+            }
         }
-        else if (t.transaction_type == "TRANSFER")
+        catch (const std::exception &e)
         {
-            std::string withdraw =
-                "UPDATE Account_Table "
-                "SET actual_balance = actual_balance - $1, "
-                "    available_balance = available_balance - $1 "
-                "WHERE account_id = $2 AND available_balance >= $1;";
-
-            std::string deposit =
-                "UPDATE Account_Table "
-                "SET actual_balance = actual_balance + $1, "
-                "    available_balance = available_balance + $1 "
-                "WHERE account_id = $2;";
-
-            std::string transaction_log_from =
-                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, to_account) "
-                "VALUES ($1, $2, $3, $4, $5);";
-
-            std::string transaction_log_to =
-                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, from_account) "
-                "VALUES ($1, $2, $3, $4, $5);";
-
-            // Step 1: Withdraw money from the sender
-            auto result_1 = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
-            if (result_1.affected_rows() == 0) {
-                t.connection->send("Transfer Failed: Insufficient funds or sender missing");
-                return; 
-            }
-
-            // Step 2: Deposit money to target recipient (Fixed target to t.to_account)
-            auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
-            if (result_2.affected_rows() == 0) {
-                t.connection->send("Transfer Failed: Recipient account missing");
-                return; // Auto-rollback triggers on exit, completely reversing the withdrawal!
-            }
-
-            // Step 3: Write out matching audit log ledger entries
-            transactions.exec_params(transaction_log_from, t.account_id, t.transaction_type, t.transaction_amount, t.remarks, t.to_account);
-            transactions.exec_params(transaction_log_to, t.to_account, t.transaction_type, t.transaction_amount, t.remarks, t.account_id);
-
-            transactions.commit();
-            t.connection->send("SUCCESS");
-            // update cache here
+            std::cerr << "TRANSACTION SYSTEM ERROR: " << e.what() << std::endl;
+            if(t.connection)
+            t.connection->send("ERROR");
         }
     }
-    catch (const std::exception &e)
-    {
-        std::cerr << "TRANSACTION SYSTEM ERROR: " << e.what() << std::endl;
-        t.connection->send("ERROR");
-    }
-}
 
     void store_users(pqxx::result &res)
     {
