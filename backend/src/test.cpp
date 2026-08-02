@@ -1,20 +1,54 @@
-// #include<drogon/drogon.h>
+#include<drogon/drogon.h>
 #include<iostream>
-// #include"web_socket_controllers.hpp"
-#include <thread>
-#include "thread_distributor.hpp"
+#include<drogon/WebSocketConnection.h>
+#include <drogon/WebSocketController.h>
 #include "password_hash.hpp"
+#include "database_loader.hpp"
+
+
 
 
 
 int main()
 {
-    std::string password = "12345";
-    std::string check_password = "123456";
-    hash_password(password);
-    std::cout << password<<std::endl;
-    std::cout << verify_password(check_password,password) << std::endl;
+   
     
+
+AccountCreationRequest create;
+create.user_id=std::nullopt;
+create.full_name = "Spider Man";
+create.address = "New York";
+create.mobile = "123456789";
+create.email = "spiderman@gmail.com";
+create.gender = "Male";
+create.nid = "143848395";
+create.account_type = "SAVING";
+create.password = "spiderman";
+create.connection = nullptr;
+
+
+AccountCreationRequest create1;
+create1.user_id=4;
+create1.full_name = "Spider Man";
+create1.address = "New York";
+create1.mobile = "123456789";
+create1.email = "spiderman@gmail.com";
+create1.gender = "Male";
+create1.nid = "143848395";
+create1.account_type = "SAVING";
+create1.password = "spiderman";
+create1.connection = nullptr;
+
+
+Load_DB load;
+
+load.create_account(create1);
+
+
+
+
+
+
 
     // Thread_Distributor thread_divider;
     // thread_divider.display();

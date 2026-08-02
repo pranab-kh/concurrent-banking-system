@@ -23,7 +23,7 @@ public:
     WS_PATH_ADD("/create_account"); // Explicit routing path for auth streams
     WS_PATH_LIST_END
 
-    std::optional<Authentication> Authentication_Parser(std::string &message, const std::string &path)
+    std::optional<Authentication> Authentication_Parser(std::string &message,const drogon::WebSocketConnectionPtr &conn, const std::string &path)
     {
         // parsing function here
         try
@@ -31,6 +31,7 @@ public:
             if (path == "/login")
             {
                 LoginRequest login;
+                login.connection = conn;
                 // login parsing logic here
                 // add all parsed data in login
 
@@ -39,6 +40,7 @@ public:
             else if (path == "/create_account")
             {
                 AccountCreationRequest create_account;
+                create_account.connection = conn;
                 // create_account parsing logic here
                 //  add all parsed data in create_account
 
@@ -72,7 +74,7 @@ public:
                 return;
             }
 
-            auto parsed_msg = Authentication_Parser(message, *path);
+            auto parsed_msg = Authentication_Parser(message,conn, *path);
 
             if (parsed_msg == std::nullopt)
             {
@@ -92,7 +94,7 @@ public:
         }
     }
 
-    void handleConnectionClosed(const drogon::WebSocketConnectionPtr &) override
+    void handleConnectionClosed(const drogon::WebSocketConnectionPtr &conn) override
     {
         std::cout << "Websocket Connection Closed" << std::endl;
     }
@@ -105,11 +107,12 @@ public:
     WS_PATH_ADD("/transaction");
     WS_PATH_LIST_END
 
-    std::optional<TransactionRequest> Transaction_Parser(std::string &message)
+    std::optional<TransactionRequest> Transaction_Parser(std::string &message,const drogon::WebSocketConnectionPtr &conn)
     {
         try
         {
             TransactionRequest transaction;
+            transaction.connection = conn;
             // transaction parsing here
             return transaction;
         }
@@ -131,7 +134,7 @@ public:
         // enqueue in request queue here
         if (type == drogon::WebSocketMessageType::Text)
         {
-            auto parsed_msg = Transaction_Parser(message);
+            auto parsed_msg = Transaction_Parser(message,conn);
             if (parsed_msg == std::nullopt)
             {
                 std::cout << "Error Parsing" << std::endl;

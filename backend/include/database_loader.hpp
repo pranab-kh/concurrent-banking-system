@@ -62,27 +62,27 @@ public:
         }
     }
 
-    //getter
-    HashTable<int, std::shared_ptr<User>>& getBankDb() {
+    // getter
+    HashTable<int, std::shared_ptr<User>> &getBankDb()
+    {
         return bank_db;
     }
-
 
     void display()
     {
         std::cout << std::left;
         std::cout << std::setw(10) << "UserID"
-                << std::setw(20) << "Name"
-                << std::setw(12) << "AcctID"
-                << std::setw(14) << "Balance"
-                << std::setw(14) << "Status"
-                << std::setw(10) << "TxnID"
-                << std::setw(14) << "Amount"
-                << std::setw(18) << "Receiver"
-                << std::setw(20) << "Remarks"
-                << std::setw(22) << "Time"
-                << std::setw(14) << "Type"
-                << std::endl;
+                  << std::setw(20) << "Name"
+                  << std::setw(12) << "AcctID"
+                  << std::setw(14) << "Balance"
+                  << std::setw(14) << "Status"
+                  << std::setw(10) << "TxnID"
+                  << std::setw(14) << "Amount"
+                  << std::setw(18) << "Receiver"
+                  << std::setw(20) << "Remarks"
+                  << std::setw(22) << "Time"
+                  << std::setw(14) << "Type"
+                  << std::endl;
 
         std::cout << std::string(140, '-') << std::endl;
 
@@ -94,29 +94,29 @@ public:
                 if (txns.empty())
                 {
                     std::cout << std::setw(10) << u_data->get_user_id()
-                            << std::setw(20) << u_data->get_full_name()
-                            << std::setw(12) << a_data->get_account_id()
-                            << std::setw(14) << a_data->get_actual_balance()
-                            << std::setw(14) << a_data->get_account_status()
-                            << "(no transactions)"
-                            << std::endl;
+                              << std::setw(20) << u_data->get_full_name()
+                              << std::setw(12) << a_data->get_account_id()
+                              << std::setw(14) << a_data->get_actual_balance()
+                              << std::setw(14) << a_data->get_account_status()
+                              << "(no transactions)"
+                              << std::endl;
                     continue;
                 }
 
                 for (const auto &[t_id, transaction] : txns)
                 {
                     std::cout << std::setw(10) << u_data->get_user_id()
-                            << std::setw(20) << u_data->get_full_name()
-                            << std::setw(12) << a_data->get_account_id()
-                            << std::setw(14) << a_data->get_actual_balance()
-                            << std::setw(14) << a_data->get_account_status()
-                            << std::setw(10) << transaction->get_transaction_id()
-                            << std::setw(14) << transaction->get_transaction_amount()
-                            << std::setw(18) << transaction->get_receiver_name()
-                            << std::setw(20) << transaction->get_remarks()
-                            << std::setw(22) << transaction->get_transaction_at()
-                            << std::setw(14) << transaction->get_transaction_type()
-                            << std::endl;
+                              << std::setw(20) << u_data->get_full_name()
+                              << std::setw(12) << a_data->get_account_id()
+                              << std::setw(14) << a_data->get_actual_balance()
+                              << std::setw(14) << a_data->get_account_status()
+                              << std::setw(10) << transaction->get_transaction_id()
+                              << std::setw(14) << transaction->get_transaction_amount()
+                              << std::setw(18) << transaction->get_receiver_name()
+                              << std::setw(20) << transaction->get_remarks()
+                              << std::setw(22) << transaction->get_transaction_at()
+                              << std::setw(14) << transaction->get_transaction_type()
+                              << std::endl;
                 }
             }
         }
@@ -145,11 +145,14 @@ public:
     {
         try
         {
-            if (!connect_database) {
+            if (!connect_database->is_open())
+            {
                 establish_connection();
             }
-            if (!connect_database) {
+            if (!connect_database->is_open())
+            {
                 std::cerr << "Couldn't connect to database" << std::endl;
+                l.connection->send("Connection Error DB");
                 return;
             }
 
@@ -167,6 +170,7 @@ public:
                 if (verification.size() == 0)
                 {
                     std::cerr << "Invalid username of password" << std::endl;
+                    l.connection->send("Invalid username or password");
                     return;
                 }
                 hashed_password = verification[0]["password_hash"].as<std::string>();
@@ -180,6 +184,7 @@ public:
             if (!verified)
             {
                 std::cerr << "Invalid username of password" << std::endl;
+                l.connection->send("Invalid username of password");
                 return;
             }
 
@@ -207,21 +212,252 @@ public:
             }
 
             std::shared_ptr<User> u;
-            if (bank_db.find(l.user_id, u)) {
+            if (bank_db.find(l.user_id, u))
+            {
                 u->set_login(status);
             }
         }
         catch (std::exception &e)
         {
             std::cerr << "ERROR:" << e.what() << std::endl;
+            l.connection->send("ERROR");
             return;
         }
     }
-    
+
+    void create_account(AccountCreationRequest &a)
+    {
+        try
+        {
+
+            if (!connect_database->is_open())
+            {
+                establish_connection();
+            }
+            if (!connect_database->is_open())
+            {
+                std::cerr << "Couldn't connect to database" << std::endl;
+                if (a.connection)
+                a.connection->send("Couldn't connect to database");
+                return;
+            }
+            std::shared_ptr<User> loaded_user;
+            bool user_exist = false;
+            bool verified = false;
+            pqxx::work user(*connect_database);
+            if (a.user_id.has_value())
+            {
+                if (bank_db.find(a.user_id.value(), loaded_user))
+                {
+                    user_exist = true;
+                    // check verification of password;
+                }
+                else
+                {
+                    std::string query2 =
+                        "SELECT password_hash "
+                        "FROM User_Table u "
+                        "WHERE u.user_id = ($1);";
+
+                    pqxx::result res = user.exec_params(query2, a.user_id.value());
+
+                    if (res.size() != 0)
+                    {
+                        user_exist = true;
+                        std::string password_hash = res[0]["password_hash"].as<std::string>();
+                        verified = verify_password(a.password, password_hash);
+                    }
+                }
+                if (!user_exist)
+                {
+                    std::cerr << "Invalid username or password" << std::endl;
+                    if (a.connection)
+                    a.connection->send("Invalid username or password");
+                    return;
+                }
+
+                if (!verified)
+                {
+                    std::cerr << "Invalid username or password" << std::endl;
+                    if (a.connection)
+                    a.connection->send("Invalid username or password");
+                    return;
+                }
+            }
+            if (!a.user_id.has_value())
+            {
+                bool success = hash_password(a.password);
+                if (!success)
+                {
+                    std::cerr << "Password Hashing Failed" << std::endl;
+                    if (a.connection)
+                    a.connection->send("Error");
+                    return;
+                }
+                std::string query =
+                    "INSERT INTO User_Table (full_name,address,mobile,email,gender,nid,password_hash) "
+                    "VALUES ($1,$2,$3,$4,$5,$6,$7) "
+                    "RETURNING user_id;";
+
+                pqxx::result res = user.exec_params(query, a.full_name, a.address, a.mobile, a.email, a.gender, a.nid, a.password);
+                if (res.size() == 0)
+                {
+                    std::cerr << "Error creating user" << std::endl;
+                    if (a.connection)
+                    a.connection->send("Error creating user");
+                    return;
+                }
+                a.user_id = res[0]["user_id"].as<int>();
+            }
+
+            std::string query3 =
+                "INSERT INTO Account_Table (user_id,account_holder,account_type) "
+                "VALUES($1,$2,$3);";
+
+            auto result = user.exec_params(query3, a.user_id, a.full_name, a.account_type);
+            if(result.affected_rows()==0)
+            {
+                std::cerr << "Failed to insert account record" << std::endl;
+                if (a.connection)
+            a.connection->send("Account creation failed");
+            return;
+            }
+
+            user.commit();
+            if (a.connection)
+            a.connection->send("Success");
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "ERROR" << std::endl;
+            if (a.connection)
+            a.connection->send("ERROR");
+
+            return;
+        }
+    }
+
+   void transaction(TransactionRequest &t)
+{
+    try
+    {
+        if (!connect_database->is_open()) { establish_connection(); }
+        if (!connect_database->is_open())
+        {
+            std::cerr << "Couldn't connect to database" << std::endl;
+            t.connection->send("Connection Error DB");
+            return;
+        }
+        
+        // Open transaction block. Destructor will handle rollback automatically if we early return.
+        pqxx::work transactions(*connect_database);
+
+        if (t.transaction_type == "WITHDRAW")
+        {
+           
+            std::string withdraw =
+                "UPDATE Account_Table "
+                "SET actual_balance = actual_balance - $1, "
+                "    available_balance = available_balance - $1 "
+                "WHERE account_id = $2 AND available_balance >= $1;";
+
+            std::string transaction_log =
+                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
+                "VALUES ($1, $2, $3, $4);";
+
+            auto result = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
+            if (result.affected_rows() == 0)
+            {
+                t.connection->send("Transaction Failed: Insufficient funds or invalid account");
+                return;
+            }
+
+            transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
+            transactions.commit();
+            t.connection->send("SUCCESS");
+            // update cache here
+        }
+        else if (t.transaction_type == "DEPOSIT")
+        {
+            
+            std::string deposit =
+                "UPDATE Account_Table "
+                "SET actual_balance = actual_balance + $1, "
+                "    available_balance = available_balance + $1 "
+                "WHERE account_id = $2;";
+
+            std::string transaction_log =
+                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks) "
+                "VALUES ($1, $2, $3, $4);";
+
+            auto result = transactions.exec_params(deposit, t.transaction_amount, t.account_id);
+            if (result.affected_rows() == 0)
+            {
+                t.connection->send("Transaction Failed: Account not found");
+                return; 
+            }
+
+            transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
+            transactions.commit();
+            t.connection->send("SUCCESS");
+            // update cache here
+        }
+        else if (t.transaction_type == "TRANSFER")
+        {
+            std::string withdraw =
+                "UPDATE Account_Table "
+                "SET actual_balance = actual_balance - $1, "
+                "    available_balance = available_balance - $1 "
+                "WHERE account_id = $2 AND available_balance >= $1;";
+
+            std::string deposit =
+                "UPDATE Account_Table "
+                "SET actual_balance = actual_balance + $1, "
+                "    available_balance = available_balance + $1 "
+                "WHERE account_id = $2;";
+
+            std::string transaction_log_from =
+                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, to_account) "
+                "VALUES ($1, $2, $3, $4, $5);";
+
+            std::string transaction_log_to =
+                "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, from_account) "
+                "VALUES ($1, $2, $3, $4, $5);";
+
+            // Step 1: Withdraw money from the sender
+            auto result_1 = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
+            if (result_1.affected_rows() == 0) {
+                t.connection->send("Transfer Failed: Insufficient funds or sender missing");
+                return; 
+            }
+
+            // Step 2: Deposit money to target recipient (Fixed target to t.to_account)
+            auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
+            if (result_2.affected_rows() == 0) {
+                t.connection->send("Transfer Failed: Recipient account missing");
+                return; // Auto-rollback triggers on exit, completely reversing the withdrawal!
+            }
+
+            // Step 3: Write out matching audit log ledger entries
+            transactions.exec_params(transaction_log_from, t.account_id, t.transaction_type, t.transaction_amount, t.remarks, t.to_account);
+            transactions.exec_params(transaction_log_to, t.to_account, t.transaction_type, t.transaction_amount, t.remarks, t.account_id);
+
+            transactions.commit();
+            t.connection->send("SUCCESS");
+            // update cache here
+        }
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "TRANSACTION SYSTEM ERROR: " << e.what() << std::endl;
+        t.connection->send("ERROR");
+    }
+}
+
     void store_users(pqxx::result &res)
     {
-        HashTable<int, std::shared_ptr<Transaction>> transactions;  
-        HashTable<int, std::shared_ptr<Account>> accounts;  
+        HashTable<int, std::shared_ptr<Transaction>> transactions;
+        HashTable<int, std::shared_ptr<Account>> accounts;
 
         for (int i = 1; i < res.size(); i++)
         {
