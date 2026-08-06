@@ -14,17 +14,17 @@ void printBalance(Bank& bank, int accountId, const std::string& label) {
 }
 
 int main() {
-    std::cout << "Load DB\n";
+    std::cout << "Load DB \n";
     Load_DB loader;
     loader.display();
 
-    std::cout << "Bank Lookup (In memory)\n";
+    std::cout << "Bank in-memory lookup\n";
     Bank bank(loader);
 
-    int testAccountId = 2;
+    int testAccountId = 2;  
     printBalance(bank, testAccountId, "Before");
 
-    std::cout << "Direct Bank::deposit\n";
+    std::cout << "Bank::deposit\n";
     if (bank.deposit(testAccountId, 1000)) {
         std::cout << "Deposit succeeded\n";
     } else {
@@ -32,19 +32,18 @@ int main() {
     }
     printBalance(bank, testAccountId, "After direct deposit");
 
-    std::cout << "WorkerPool and JobHub\n";
+    std::cout << "WorkerPool + JobHub\n";
     JobHub hub;
     ResponseQueue responseQueue;
     WorkerPool pool(bank, loader, hub, responseQueue, 2, 4);
 
     TransactionRequest req;
-    req.requestId = 1;
-    req.type = TransactionType::DEPOSIT;
-    req.accountId = testAccountId;
-    req.amountCents = 500;
+    req.account_id = testAccountId;
+    req.transaction_type = "DEPOSIT";
+    req.transaction_amount = 500;
     hub.pushTransaction(req);
 
-    sleep(1);   // give a worker thread time to process it
+    sleep(1);   // process time
 
     TransactionResponse resp;
     if (responseQueue.pop(resp)) {
@@ -56,7 +55,7 @@ int main() {
 
     printBalance(bank, testAccountId, "After WorkerPool deposit");
 
-    std::cout << "\Withdraw more than available\n";
+    std::cout << "Withdraw more than available (should fail) \n";
     long long huge = 999999999999;
     if (!bank.withdraw(testAccountId, huge)) {
         std::cout << "Correctly rejected oversized withdrawal\n";
@@ -64,15 +63,15 @@ int main() {
         std::cout << "BUG: oversized withdrawal succeeded\n";
     }
 
-    std::cout << "Transfer between two accounts\n";
-    int accountA = 1, accountB = 2;   // check acc ids
+    std::cout << "Transfer between two accounts \n";
+    int accountA = 2, accountB = 1;   
     long long balA, balB;
     bank.getBalance(accountA, balA);
     bank.getBalance(accountB, balB);
     std::cout << "Before transfer -> A: " << balA << ", B: " << balB << "\n";
 
     if (bank.transfer(accountA, accountB, 200)) {
-        std::cout << "Transfer SUCCESS\n";
+        std::cout << "Transfer succeeded\n";
     } else {
         std::cout << "Transfer FAILED\n";
     }
@@ -81,6 +80,6 @@ int main() {
     bank.getBalance(accountB, balB);
     std::cout << "After transfer  -> A: " << balA << ", B: " << balB << "\n";
 
-    std::cout << "Success\n";
+    std::cout << "Test completed!\n";
     return 0;
 }
