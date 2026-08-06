@@ -1,40 +1,36 @@
-cmake_minimum_required(VERSION 3.10)
-project(test_app)
+cmake_minimum_required(VERSION 3.16)
+project(ConcurrentBankingSystem CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find Drogon
-find_package(Drogon REQUIRED)
-
-# Find Threads
 find_package(Threads REQUIRED)
-
-# Find libpqxx via pkg-config
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPQXX REQUIRED libpqxx)
+find_package(Drogon REQUIRED)
 
-# Add the executable
-add_executable(test_app
-    backend/src/test.cpp
+include_directories(backend/include)
+
+add_executable(bank_main
+    backend/src/main.cpp
     backend/src/bcrypt.c
     backend/src/crypt_blowfish.c
     backend/src/crypt_gensalt.c
     backend/src/wrapper.c
 )
 
-# Include directories
-target_include_directories(test_app PRIVATE
-    ${LIBPQXX_INCLUDE_DIRS}
-    backend/include
+target_include_directories(bank_main PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+target_link_libraries(bank_main PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+target_link_directories(bank_main PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
+
+add_executable(bank_test
+    backend/src/main.cpp
+    backend/src/bcrypt.c
+    backend/src/crypt_blowfish.c
+    backend/src/crypt_gensalt.c
+    backend/src/wrapper.c
 )
 
-# Link libraries
-target_link_libraries(test_app
-    PRIVATE
-    Drogon::Drogon
-    Threads::Threads
-    ${LIBPQXX_LIBRARIES}
-    pq
-    jsoncpp
-    argon2
-)
+target_include_directories(bank_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+target_link_libraries(bank_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+target_link_directories(bank_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
