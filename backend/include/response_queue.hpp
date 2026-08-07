@@ -12,6 +12,8 @@ struct TransactionResponse {
     bool success;
     std::string message;
     long long newBalanceCents;
+    std::string type;   // "DEPOSIT" / "WITHDRAW" / "TRANSFER"
+    long long amount;
 };
 
 class ResponseQueue {
