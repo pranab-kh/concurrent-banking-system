@@ -102,7 +102,9 @@ public:
 
     TransactionResponse process(const TransactionRequest& req) {
         TransactionResponse resp;
-        resp.requestId = 0; // --?
+        resp.requestId = 0;
+        resp.type = req.transaction_type;
+        resp.amount = req.transaction_amount;
 
         if (req.transaction_type == "DEPOSIT") {
             resp.success = deposit(req.account_id, req.transaction_amount);
@@ -131,5 +133,4 @@ public:
         return resp;
     }
 };
-
 #endif
