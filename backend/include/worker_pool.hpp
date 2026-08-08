@@ -28,7 +28,7 @@ private:
     bool shuttingDown_ = false;
 
 public:
-    JobHub(int loginCapacity = 100, int transactionCapacity = 500)
+    JobHub(int loginCapacity = 100, int transactionCapacity = 2500)
         : loginQueue_(loginCapacity), transactionQueue_(transactionCapacity)
     {
         if (pthread_mutex_init(&mutex_, nullptr) != 0) {
@@ -62,51 +62,52 @@ public:
         pthread_cond_signal(&notEmpty_);
     }
 
-    bool pop(JobType homeType, Job& outJob) {
+    bool pop(JobType homeType, Job& outJob) 
+    {
         MutexGuard guard(mutex_);
 
-        // sleep efficiently while both queues are empt and not shutting down
-        while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && !shuttingDown_) {
-            pthread_cond_wait(&notEmpty_, &mutex_);
-        }
+        while (true) {
+            while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && !shuttingDown_) {
+                pthread_cond_wait(&notEmpty_, &mutex_);
+            }
 
-        //wake up for shutdown
-        if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty()) {
-            return false;
-        }
+            if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty()) {
+                return false;
+            }
 
-        if (homeType == JobType::LOGIN) {
-            if (!loginQueue_.isEmpty()) { //takes from it's own login queue first if available
-                outJob.type = JobType::LOGIN;
-                outJob.loginReq = loginQueue_.front();
-                loginQueue_.pop();
-                return true;
-            }
-            if (!transactionQueue_.isEmpty()) { //else checks for transaction queue
-                outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = transactionQueue_.front();
-                transactionQueue_.pop();
-                return true;
-            }
-        } else { // case for homeType == JobType::TRANSACTION
-            if (!transactionQueue_.isEmpty()) {
-                outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = transactionQueue_.front();
-                transactionQueue_.pop();
-                return true;
-            }
-            if (!loginQueue_.isEmpty()) {
-                outJob.type = JobType::LOGIN;
-                outJob.loginReq = loginQueue_.front();
-                loginQueue_.pop();
-                return true;
+            if (homeType == JobType::LOGIN) {
+                if (!loginQueue_.isEmpty()) {
+                    outJob.type = JobType::LOGIN;
+                    outJob.loginReq = loginQueue_.front();
+                    loginQueue_.pop();
+                    return true;
+                }
+                if (!transactionQueue_.isEmpty()) {
+                    outJob.type = JobType::TRANSACTION;
+                    outJob.txnReq = transactionQueue_.front();
+                    transactionQueue_.pop();
+                    return true;
+                }
+            } else {
+                if (!transactionQueue_.isEmpty()) {
+                    outJob.type = JobType::TRANSACTION;
+                    outJob.txnReq = transactionQueue_.front();
+                    transactionQueue_.pop();
+                    return true;
+                }
+                if (!loginQueue_.isEmpty()) {
+                    outJob.type = JobType::LOGIN;
+                    outJob.loginReq = loginQueue_.front();
+                    loginQueue_.pop();
+                    return true;
+                }
             }
         }
-
-        return pop(homeType, outJob); // handles behaviour under concurrency
     }
-
-    void shutdown() {
+    
+    
+    void shutdown() 
+    {
         MutexGuard guard(mutex_);
         shuttingDown_ = true;
         pthread_cond_broadcast(&notEmpty_);
