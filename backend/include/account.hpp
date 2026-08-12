@@ -61,8 +61,17 @@ public:
     // Getters
     int get_account_id() const { return account_id; }
     const std::string &get_account_holder() const { return account_holder; }
-    int64_t get_actual_balance() const { return actual_balance; }
-    int64_t get_available_balance() const { return available_balance; }
+    int64_t get_actual_balance() const 
+    {
+        MutexGuard guard(mutex_);
+        return actual_balance;
+    }
+    
+    int64_t get_available_balance() const 
+    {
+        MutexGuard guard(mutex_);
+        return available_balance;
+    }
     int64_t get_hold_amount() const { return hold_amount; }
     const std::string &get_account_status() const { return account_status; }
     const std::string &get_account_type() const { return account_type; }
@@ -83,7 +92,6 @@ public:
         {
             throw std::invalid_argument("Deposit amount must be positive");
         }
-
         MutexGuard guard(mutex_);
         actual_balance += amountCents;
         available_balance += amountCents;
@@ -96,20 +104,16 @@ public:
         {
             throw std::invalid_argument("Withdrawal amount must be positive");
         }
-
         MutexGuard guard(mutex_);
         if (amountCents > available_balance)
         {
             return false;
         }
-
         actual_balance -= amountCents;
-                available_balance -= amountCents;
-
+        available_balance -= amountCents;
         return true;
     }
 
-    // these all are internal variants
     void depositUnlocked(int64_t amountCents)
     {
         if (amountCents <= 0)
@@ -117,8 +121,7 @@ public:
             throw std::invalid_argument("Deposit amount must be positive");
         }
         actual_balance += amountCents;
-                available_balance += amountCents;
-
+        available_balance += amountCents;
     }
 
     bool withdrawUnlocked(int64_t amountCents)
@@ -133,7 +136,6 @@ public:
         }
         actual_balance -= amountCents;
         available_balance -= amountCents;
-
         return true;
     }
 
