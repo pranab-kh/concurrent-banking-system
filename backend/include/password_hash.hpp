@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include "BCrypt.hpp"
 
-bool hash_password(std::string &password)
+inline bool hash_password(std::string &password)
 {
     const char *pepper = std::getenv("PEPPER");
 
@@ -24,7 +24,7 @@ bool hash_password(std::string &password)
 
     return true;
 }
-bool verify_password(std::string &password, std::string &hashed_password)
+inline bool verify_password(std::string &password, std::string &hashed_password)
 {
     const char *pepper = std::getenv("PEPPER");
 
