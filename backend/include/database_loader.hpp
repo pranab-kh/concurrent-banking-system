@@ -338,28 +338,15 @@ public:
         }
     }
 
-    void transaction(TransactionRequest &t)
+
+    void transaction(TransactionRequest &t, Bank& bank, pqxx::connection& conn)
     {
         try
         {
-            if (!connect_database->is_open())
-            {
-                establish_connection();
-            }
-            if (!connect_database->is_open())
-            {
-                std::cerr << "Couldn't connect to database" << std::endl;
-                if (t.connection)
-                    t.connection->send("Connection Error DB");
-                return;
-            }
-
-            // Open transaction block. Destructor will handle rollback automatically if we early return.
-            pqxx::work transactions(*connect_database);
+            pqxx::work transactions(conn);
 
             if (t.transaction_type == "WITHDRAW")
             {
-
                 std::string withdraw =
                     "UPDATE Account_Table "
                     "SET actual_balance = actual_balance - $1, "
@@ -373,7 +360,6 @@ public:
                 auto result = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
                 if (result.affected_rows() == 0)
                 {
-                    std::cerr<<"Transaction Failed: Insufficient funds or invalid account"<<std::endl;
                     if (t.connection)
                         t.connection->send("Transaction Failed: Insufficient funds or invalid account");
                     return;
@@ -381,13 +367,14 @@ public:
 
                 transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
                 transactions.commit();
+
+                bank.applyMemoryUpdate(t);
+
                 if (t.connection)
                     t.connection->send("SUCCESS");
-                // update cache here
             }
             else if (t.transaction_type == "DEPOSIT")
             {
-
                 std::string deposit =
                     "UPDATE Account_Table "
                     "SET actual_balance = actual_balance + $1, "
@@ -408,9 +395,11 @@ public:
 
                 transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
                 transactions.commit();
+
+                bank.applyMemoryUpdate(t);
+
                 if (t.connection)
                     t.connection->send("SUCCESS");
-                // update cache here
             }
             else if (t.transaction_type == "TRANSFER")
             {
@@ -434,7 +423,6 @@ public:
                     "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, from_account) "
                     "VALUES ($1, $2, $3, $4, $5);";
 
-                // Step 1: Withdraw money from the sender
                 auto result_1 = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
                 if (result_1.affected_rows() == 0)
                 {
@@ -443,30 +431,30 @@ public:
                     return;
                 }
 
-                // Step 2: Deposit money to target recipient (Fixed target to t.to_account)
                 auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
                 if (result_2.affected_rows() == 0)
                 {
                     if (t.connection)
                         t.connection->send("Transfer Failed: Recipient account missing");
-                    return; // Auto-rollback triggers on exit, completely reversing the withdrawal!
+                    return;
                 }
 
-                // Step 3: Write out matching audit log ledger entries
                 transactions.exec_params(transaction_log_from, t.account_id, t.transaction_type, t.transaction_amount, t.remarks, t.to_account);
                 transactions.exec_params(transaction_log_to, t.to_account, t.transaction_type, t.transaction_amount, t.remarks, t.account_id);
 
                 transactions.commit();
+
+                bank.applyMemoryUpdate(t);
+
                 if (t.connection)
                     t.connection->send("SUCCESS");
-                // update cache here
             }
         }
         catch (const std::exception &e)
         {
             std::cerr << "TRANSACTION SYSTEM ERROR: " << e.what() << std::endl;
-            if(t.connection)
-            t.connection->send("ERROR");
+            if (t.connection)
+                t.connection->send("ERROR");
         }
     }
 
@@ -484,7 +472,6 @@ public:
 
             if (!res[i - 1]["transaction_id"].is_null())
             {
-
                 int transaction_id = res[i - 1]["transaction_id"].as<int>();
                 int64_t transaction_amount = res[i - 1]["transaction_amount"].as<int64_t>();
                 std::string transaction_type = res[i - 1]["transaction_type"].as<std::string>();
@@ -492,7 +479,6 @@ public:
                 std::string transaction_status = res[i - 1]["transaction_status"].as<std::string>();
                 std::string transaction_at = res[i - 1]["transaction_at"].as<std::string>();
 
-                // optional int these field can be null
                 std::optional<int> from_account = res[i - 1]["from_account"].as<std::optional<int>>();
                 std::optional<int> to_account = res[i - 1]["to_account"].as<std::optional<int>>();
                 std::string receiver_name = res[i - 1]["receiver_name"].is_null() ? "" : res[i - 1]["receiver_name"].as<std::string>();
@@ -501,10 +487,14 @@ public:
                 auto t = std::make_shared<Transaction>(transaction_id, from_account, to_account, transaction_amount, receiver_name, receiver_mobile, remarks, transaction_status, transaction_at, transaction_type);
                 transactions.insert(transaction_id, t);
             }
+
+            // FIX: extract actual int values before comparing, instead of comparing pqxx::field objects directly
+            int prevAccountId = res[i - 1]["account_id"].is_null() ? -1 : res[i - 1]["account_id"].as<int>();
+            int currAccountId = res[i]["account_id"].is_null() ? -1 : res[i]["account_id"].as<int>();
+
             if (!res[i - 1]["account_id"].is_null())
             {
-
-                if (res[i - 1]["account_id"] != res[i]["account_id"])
+                if (prevAccountId != currAccountId)
                 {
                     int account_id = res[i - 1]["account_id"].as<int>();
                     std::string account_holder = res[i - 1]["account_holder"].as<std::string>();
@@ -521,7 +511,12 @@ public:
                     transactions = HashTable<int, std::shared_ptr<Transaction>>();
                 }
             }
-            if (res[i - 1]["user_id"] != res[i]["user_id"])
+
+            // FIX: same extraction for user_id comparison
+            int prevUserId = res[i - 1]["user_id"].is_null() ? -1 : res[i - 1]["user_id"].as<int>();
+            int currUserId = res[i]["user_id"].is_null() ? -1 : res[i]["user_id"].as<int>();
+
+            if (prevUserId != currUserId)
             {
                 int user_id = res[i - 1]["user_id"].as<int>();
                 std::string full_name = res[i - 1]["full_name"].as<std::string>();
@@ -546,10 +541,8 @@ public:
         {
             size_t last = res.size() - 1;
 
-            // Proceed only if the last row contains a valid user profile
             if (!res[last]["user_id"].is_null())
             {
-                // 1. Accumulate the final transaction if it exists
                 if (!res[last]["transaction_id"].is_null())
                 {
                     int transaction_id = res[last]["transaction_id"].as<int>();
@@ -568,7 +561,6 @@ public:
                     transactions.insert(transaction_id, t);
                 }
 
-                // 2. Commit the final account structure to the map
                 if (!res[last]["account_id"].is_null())
                 {
                     int account_id = res[last]["account_id"].as<int>();
@@ -585,7 +577,6 @@ public:
                     accounts.insert(account_id, a);
                 }
 
-                // 3. Commit the final active user profile to your bank database
                 int user_id = res[last]["user_id"].as<int>();
                 std::string full_name = res[last]["full_name"].as<std::string>();
                 std::string address = res[last]["address"].as<std::string>();
@@ -600,11 +591,11 @@ public:
 
                 auto u = std::make_shared<User>(user_id, full_name, address, mobile, email, gender, nid, password_hash, user_created_at, user_updated_at, login_status, std::move(accounts));
                 bank_db.insert(user_id, u);
-                // 4. Memory flush
                 transactions = HashTable<int, std::shared_ptr<Transaction>>();
                 accounts = HashTable<int, std::shared_ptr<Account>>();
             }
         }
     }
+
 };
 #endif
