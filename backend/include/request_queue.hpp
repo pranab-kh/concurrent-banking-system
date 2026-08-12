@@ -127,7 +127,7 @@ private:
     bool shuttingDown_ = false;
 
 public:
-    RequestQueue() 
+    RequestQueue(int capacity = 1500) : queue_(capacity)
     {
         if (pthread_mutex_init(&mutex_, nullptr) != 0) 
         {
