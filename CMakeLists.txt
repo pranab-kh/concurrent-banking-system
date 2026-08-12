@@ -21,11 +21,13 @@ add_executable(bank_main
 
 add_executable(stress_test
     backend/src/stress_test.cpp
+    backend/src/database_loader.cpp
     backend/src/bcrypt.c
     backend/src/crypt_blowfish.c
     backend/src/crypt_gensalt.c
     backend/src/wrapper.c
 )
+
 target_include_directories(stress_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
 target_link_libraries(stress_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
 target_link_directories(stress_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
