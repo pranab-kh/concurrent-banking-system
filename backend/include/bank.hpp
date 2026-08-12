@@ -132,5 +132,42 @@ public:
         resp.newBalanceCents = getBalance(req.account_id, bal) ? bal : 0;
         return resp;
     }
+
+    bool applyMemoryUpdate(const TransactionRequest& t) 
+    {
+        std::shared_ptr<Account> acc;
+        if (!findAccount(t.account_id, acc)) return false;
+
+        if (t.transaction_type == "DEPOSIT") {
+            MutexGuard guard(acc->getMutex());
+            acc->depositUnlocked(t.transaction_amount);
+            return true;
+        }
+        else if (t.transaction_type == "WITHDRAW") {
+            MutexGuard guard(acc->getMutex());
+            acc->withdrawUnlocked(t.transaction_amount);
+            return true;
+        }
+        else if (t.transaction_type == "TRANSFER") {
+            if (!t.to_account.has_value()) return false;
+            std::shared_ptr<Account> to;
+            //reuses Bank's existing fast secondary-index lookup accountIdToUserId_ → bank_db → User's accounts
+            if (!findAccount(t.to_account.value(), to)) return false;
+
+            Account* first  = (t.account_id < t.to_account.value()) ? acc.get() : to.get();
+            Account* second = (t.account_id < t.to_account.value()) ? to.get()  : acc.get();
+
+            pthread_mutex_lock(&first->getMutex());
+            pthread_mutex_lock(&second->getMutex());
+
+            acc->withdrawUnlocked(t.transaction_amount);
+            to->depositUnlocked(t.transaction_amount);
+
+            pthread_mutex_unlock(&second->getMutex());
+            pthread_mutex_unlock(&first->getMutex());
+            return true;
+        }
+        return false;
+    }
 };
 #endif
