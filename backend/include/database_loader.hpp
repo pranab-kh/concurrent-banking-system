@@ -340,7 +340,7 @@ public:
         }
     }
 
-    void transaction(TransactionRequest &t, Bank& bank, pqxx::connection& conn);
+    bool transaction(TransactionRequest &t, Bank& bank, pqxx::connection& conn);
 
     void store_users(pqxx::result &res)
     {
