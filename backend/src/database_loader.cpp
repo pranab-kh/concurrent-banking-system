@@ -1,7 +1,7 @@
 #include "database_loader.hpp"
 #include "bank.hpp"
 
-void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& conn)
+bool Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& conn)
 {
     try
     {
@@ -24,7 +24,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
             {
                 if (t.connection)
                     t.connection->send("Transaction Failed: Insufficient funds or invalid account");
-                return;
+                return false;
             }
 
             transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
@@ -34,6 +34,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
 
             if (t.connection)
                 t.connection->send("SUCCESS");
+            return true;
         }
         else if (t.transaction_type == "DEPOSIT")
         {
@@ -52,7 +53,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
             {
                 if (t.connection)
                     t.connection->send("Transaction Failed: Account not found");
-                return;
+                return false;
             }
 
             transactions.exec_params(transaction_log, t.account_id, t.transaction_type, t.transaction_amount, t.remarks);
@@ -62,6 +63,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
 
             if (t.connection)
                 t.connection->send("SUCCESS");
+            return true;
         }
         else if (t.transaction_type == "TRANSFER")
         {
@@ -90,7 +92,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
             {
                 if (t.connection)
                     t.connection->send("Transfer Failed: Insufficient funds or sender missing");
-                return;
+                return false;
             }
 
             auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
@@ -98,7 +100,7 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
             {
                 if (t.connection)
                     t.connection->send("Transfer Failed: Recipient account missing");
-                return;
+                return false;
             }
 
             transactions.exec_params(transaction_log_from, t.account_id, t.transaction_type, t.transaction_amount, t.remarks, t.to_account);
@@ -110,12 +112,16 @@ void Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
 
             if (t.connection)
                 t.connection->send("SUCCESS");
+            return true;
         }
+
+        return false;   // unknown transaction_type
     }
     catch (const std::exception &e)
     {
         std::cerr << "TRANSACTION SYSTEM ERROR: " << e.what() << std::endl;
         if (t.connection)
             t.connection->send("ERROR");
+        return false;
     }
 }
