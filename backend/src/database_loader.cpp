@@ -87,16 +87,27 @@ bool Load_DB::transaction(TransactionRequest &t, Bank& bank, pqxx::connection& c
                 "INSERT INTO Transaction_Table (account_id, transaction_type, transaction_amount, remarks, from_account) "
                 "VALUES ($1, $2, $3, $4, $5);";
 
-            auto result_1 = transactions.exec_params(withdraw, t.transaction_amount, t.account_id);
-            if (result_1.affected_rows() == 0)
+            int fromId = t.account_id;
+            int toId = t.to_account.value();
+
+            // Lock ordering: always touch the lower account_id's row first,
+            // regardless of transfer direction
+            pqxx::result withdrawResult, depositResult;
+            if (fromId < toId) {
+                withdrawResult = transactions.exec_params(withdraw, t.transaction_amount, fromId);
+                depositResult  = transactions.exec_params(deposit,  t.transaction_amount, toId);
+            } else {
+                depositResult  = transactions.exec_params(deposit,  t.transaction_amount, toId);
+                withdrawResult = transactions.exec_params(withdraw, t.transaction_amount, fromId);
+            }
+
+            if (withdrawResult.affected_rows() == 0)
             {
                 if (t.connection)
                     t.connection->send("Transfer Failed: Insufficient funds or sender missing");
                 return false;
             }
-
-            auto result_2 = transactions.exec_params(deposit, t.transaction_amount, t.to_account);
-            if (result_2.affected_rows() == 0)
+            if (depositResult.affected_rows() == 0)
             {
                 if (t.connection)
                     t.connection->send("Transfer Failed: Recipient account missing");
