@@ -44,7 +44,7 @@ public:
 
                 std::string query =
                     "SELECT u.user_id,u.full_name,u.address,u.mobile,u.email,u.gender,u.nid,u.password_hash,u.user_created_at,u.user_updated_at,u.login_status,"
-                    "a.account_id,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
+                    "a.account_id,a.account_number,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
                     "t.transaction_id,t.transaction_type,t.from_account,t.to_account,t.transaction_amount,t.receiver_name,t.receiver_mobile,t.remarks,t.transaction_status,t.transaction_at "
                     "FROM User_Table u "
                     "LEFT JOIN Account_Table a on u.user_id = a.user_id "
@@ -202,7 +202,7 @@ public:
                 pqxx::nontransaction read(*connect_database);
                 std::string query2 =
                     "SELECT u.user_id,u.full_name,u.address,u.mobile,u.email,u.gender,u.nid,u.password_hash,u.user_created_at,u.user_updated_at,u.login_status,"
-                    "a.account_id,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
+                    "a.account_id,a.account_number,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
                     "t.transaction_id,t.transaction_type,t.from_account,t.to_account,t.transaction_amount,t.receiver_name,t.receiver_mobile,t.remarks,t.transaction_status,t.transaction_at "
                     "FROM User_Table u "
                     "LEFT JOIN Account_Table a on u.user_id = a.user_id "
@@ -360,7 +360,7 @@ public:
         }
         catch (std::exception &e)
         {
-            std::cerr << "ERROR" << std::endl;
+            std::cerr << "ERROR in create_account: " << e.what() << std::endl;
             if (a.connection)
                 a.connection->send("ERROR");
             return;
