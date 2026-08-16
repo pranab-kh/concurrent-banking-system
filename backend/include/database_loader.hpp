@@ -408,6 +408,7 @@ public:
                 if (prevAccountId != currAccountId)
                 {
                     int account_id = res[i - 1]["account_id"].as<int>();
+                    std::string account_number = res[i - 1]["account_number"].as<std::string>();   // NEW
                     std::string account_holder = res[i - 1]["account_holder"].as<std::string>();
                     int64_t actual_balance = res[i - 1]["actual_balance"].as<int64_t>();
                     int64_t available_balance = res[i - 1]["available_balance"].as<int64_t>();
@@ -417,7 +418,7 @@ public:
                     std::string account_created_at = res[i - 1]["account_created_at"].as<std::string>();
                     std::string account_updated_at = res[i - 1]["account_updated_at"].as<std::string>();
 
-                    auto a = std::make_shared<Account>(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
+                    auto a = std::make_shared<Account>(account_id, account_number, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
                     accounts.insert(account_id, a);
                     transactions = HashTable<int, std::shared_ptr<Transaction>>();
                 }
@@ -475,6 +476,7 @@ public:
                 if (!res[last]["account_id"].is_null())
                 {
                     int account_id = res[last]["account_id"].as<int>();
+                    std::string account_number = res[last]["account_number"].as<std::string>();   
                     std::string account_holder = res[last]["account_holder"].as<std::string>();
                     int64_t actual_balance = res[last]["actual_balance"].as<int64_t>();
                     int64_t available_balance = res[last]["available_balance"].as<int64_t>();
@@ -484,7 +486,7 @@ public:
                     std::string account_created_at = res[last]["account_created_at"].as<std::string>();
                     std::string account_updated_at = res[last]["account_updated_at"].as<std::string>();
 
-                    auto a = std::make_shared<Account>(account_id, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
+                    auto a = std::make_shared<Account>(account_id, account_number, account_holder, actual_balance, available_balance, hold_amount, account_status, account_type, account_created_at, account_updated_at, std::move(transactions));
                     accounts.insert(account_id, a);
                 }
 
@@ -507,6 +509,5 @@ public:
             }
         }
     }
-
 };
 #endif
