@@ -8,6 +8,7 @@
 #include <memory>
 #include "password_hash.hpp"
 #include "hashtable.hpp"
+#include "account_number_generator.hpp" 
 
 class Bank; 
 
@@ -231,7 +232,6 @@ public:
     {
         try
         {
-
             if (!connect_database->is_open())
             {
                 establish_connection();
@@ -243,16 +243,18 @@ public:
                     a.connection->send("Couldn't connect to database");
                 return;
             }
+
             std::shared_ptr<User> loaded_user;
             bool user_exist = false;
             bool verified = false;
             pqxx::work user(*connect_database);
+
+            // existing user vs new user check
             if (a.user_id.has_value())
             {
                 if (bank_db.find(a.user_id.value(), loaded_user))
                 {
                     user_exist = true;
-                    // check verification of password;
                 }
                 else
                 {
@@ -287,6 +289,8 @@ public:
                     return;
                 }
             }
+
+            // new user registration
             if (!a.user_id.has_value())
             {
                 bool success = hash_password(a.password);
@@ -313,14 +317,38 @@ public:
                 a.user_id = res[0]["user_id"].as<int>();
             }
 
-            std::string query3 =
-                "INSERT INTO Account_Table (user_id,account_holder,account_type) "
-                "VALUES($1,$2,$3);";
+            // account number part
+            std::string accountNumber;
+            const int MAX_RETRIES = 5;
+            bool inserted = false;
 
-            auto result = user.exec_params(query3, a.user_id, a.full_name, a.account_type);
-            if (result.affected_rows() == 0)
+            for (int attempt = 0; attempt < MAX_RETRIES && !inserted; attempt++)
             {
-                std::cerr << "Failed to insert account record" << std::endl;
+                accountNumber = AccountNumberGenerator::generateCandidate();
+
+                std::string query3 =
+                    "INSERT INTO Account_Table (user_id, account_holder, account_type, account_number) "
+                    "VALUES ($1, $2, $3, $4);";
+
+                try
+                {
+                    auto result = user.exec_params(query3, a.user_id, a.full_name, a.account_type, accountNumber);
+                    if (result.affected_rows() > 0)
+                    {
+                        inserted = true;
+                    }
+                }
+                catch (const pqxx::sql_error &e)
+                {
+                    // UNIQUE constraint violation on account_number will retry
+                    std::cerr << "Account number collision, retrying (" << e.what() << ")" << std::endl;
+                    continue;
+                }
+            }
+
+            if (!inserted)
+            {
+                std::cerr << "Failed to insert account record after " << MAX_RETRIES << " attempts" << std::endl;
                 if (a.connection)
                     a.connection->send("Account creation failed");
                 return;
@@ -335,7 +363,6 @@ public:
             std::cerr << "ERROR" << std::endl;
             if (a.connection)
                 a.connection->send("ERROR");
-
             return;
         }
     }
