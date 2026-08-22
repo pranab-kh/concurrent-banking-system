@@ -3,214 +3,115 @@
 
 #include "bank.hpp"
 #include "database_loader.hpp"
-#include "transaction_request.hpp"
 #include "request_queue.hpp"
 #include "response_queue.hpp"
-#include "mutex_guard.hpp"
 #include <pthread.h>
 #include <vector>
 #include <stdexcept>
-
-enum class JobType { LOGIN, TRANSACTION, ACCOUNT_CREATION, NONE };
-
-struct Job {
-    JobType type;
-    LoginRequest loginReq;
-    TransactionRequest txnReq;
-    AccountCreationRequest accountReq;
-};
-
-class JobHub {
-private:
-    circular_queue<LoginRequest> loginQueue_;
-    circular_queue<TransactionRequest> transactionQueue_;
-    circular_queue<AccountCreationRequest> accountQueue_;
-    pthread_mutex_t mutex_;
-    pthread_cond_t notEmpty_;
-    bool shuttingDown_ = false;
-
-public:
-    JobHub(int loginCapacity = 100, int transactionCapacity = 500, int accountCapacity = 100)
-        : loginQueue_(loginCapacity), transactionQueue_(transactionCapacity), accountQueue_(accountCapacity)
-    {
-        if (pthread_mutex_init(&mutex_, nullptr) != 0) {
-            throw std::runtime_error("Failed to initialize JobHub mutex");
-        }
-        if (pthread_cond_init(&notEmpty_, nullptr) != 0) {
-            pthread_mutex_destroy(&mutex_);
-            throw std::runtime_error("Failed to initialize JobHub condition variable");
-        }
-    }
-
-    ~JobHub() {
-        pthread_mutex_destroy(&mutex_);
-        pthread_cond_destroy(&notEmpty_);
-    }
-
-    JobHub(const JobHub&) = delete;
-    JobHub& operator=(const JobHub&) = delete;
-
-    void pushLogin(LoginRequest req) {
-        MutexGuard guard(mutex_);
-        if (shuttingDown_) return;
-        loginQueue_.push(req);
-        pthread_cond_signal(&notEmpty_);
-    }
-
-    void pushTransaction(TransactionRequest req) {
-        MutexGuard guard(mutex_);
-        if (shuttingDown_) return;
-        transactionQueue_.push(req);
-        pthread_cond_signal(&notEmpty_);
-    }
-
-    void pushAccountCreation(AccountCreationRequest req) {
-        MutexGuard guard(mutex_);
-        if (shuttingDown_) return;
-        accountQueue_.push(req);
-        pthread_cond_signal(&notEmpty_);
-    }
-
-    bool pop(JobType homeType, Job& outJob) {
-        MutexGuard guard(mutex_);
-
-        // sleep efficiently while all queues are empty and not shutting down
-        while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && accountQueue_.isEmpty() && !shuttingDown_) {
-            pthread_cond_wait(&notEmpty_, &mutex_);
-        }
-
-        //wake up for shutdown
-        if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty() && accountQueue_.isEmpty()) {
-            return false;
-        }
-
-        if (homeType == JobType::LOGIN) {
-            if (!loginQueue_.isEmpty()) { //takes from it's own login queue first if available
-                outJob.type = JobType::LOGIN;
-                outJob.loginReq = loginQueue_.front();
-                loginQueue_.pop();
-                return true;
-            }
-            if (!accountQueue_.isEmpty()) { // account creation is auth/DB work, same lane as login
-                outJob.type = JobType::ACCOUNT_CREATION;
-                outJob.accountReq = accountQueue_.front();
-                accountQueue_.pop();
-                return true;
-            }
-            if (!transactionQueue_.isEmpty()) { //else checks for transaction queue
-                outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = transactionQueue_.front();
-                transactionQueue_.pop();
-                return true;
-            }
-        } else { // case for homeType == JobType::TRANSACTION
-            if (!transactionQueue_.isEmpty()) {
-                outJob.type = JobType::TRANSACTION;
-                outJob.txnReq = transactionQueue_.front();
-                transactionQueue_.pop();
-                return true;
-            }
-            if (!loginQueue_.isEmpty()) {
-                outJob.type = JobType::LOGIN;
-                outJob.loginReq = loginQueue_.front();
-                loginQueue_.pop();
-                return true;
-            }
-            if (!accountQueue_.isEmpty()) {
-                outJob.type = JobType::ACCOUNT_CREATION;
-                outJob.accountReq = accountQueue_.front();
-                accountQueue_.pop();
-                return true;
-            }
-        }
-
-        return pop(homeType, outJob); // handles behaviour under concurrency
-    }
-
-    void shutdown() {
-        MutexGuard guard(mutex_);
-        shuttingDown_ = true;
-        pthread_cond_broadcast(&notEmpty_);
-    }
-};
+#include <pqxx/pqxx>
+#include <cstdlib>
+#include <iostream>
 
 class WorkerPool {
 private:
-    JobHub& hub_;
+    RequestQueue<TransactionRequest>& transactionQueue_;
+    RequestQueue<LoginRequest>& loginQueue_;
     Bank& bank_;
     Load_DB& db_;
     ResponseQueue& responseQueue_;
-    std::vector<pthread_t> workers_;
+    std::vector<pthread_t> transactionWorkers_;
+    std::vector<pthread_t> loginWorkers_;
 
-    /*
-    pthread_create only accepts one void* argument but each thread needs to know both which worker pool it belongs to and its home type
-    ThreadArgs bundles both into one heap-allocated object
-    */
-    struct ThreadArgs {
-        WorkerPool* pool;
-        JobType homeType;
-    };
-
-    static void* workerLoop(void* arg) //same signature required by pthread_create
-    {
-        ThreadArgs* args = static_cast<ThreadArgs*>(arg);
-        WorkerPool* pool = args->pool;
-        JobType homeType = args->homeType;
-        delete args;
-        pool->run(homeType); //hands over control to main worker pool logic
+    //pthread_create needs a plain function pointer
+    static void* transactionWorkerLoop(void* arg) {
+        WorkerPool* pool = static_cast<WorkerPool*>(arg);
+        pool->runTransactionWorker();
         return nullptr;
     }
 
-    //main loop
-    void run(JobType homeType) 
-    {
-        Job job;
-        while (hub_.pop(homeType, job)) {
-            if (job.type == JobType::LOGIN) {
-                db_.login(job.loginReq);
-            } else if (job.type == JobType::ACCOUNT_CREATION) {
-                db_.create_account(job.accountReq);
-            } else {
-                TransactionResponse resp = bank_.process(job.txnReq);
-                responseQueue_.push(resp);
-            }
+    static void* loginWorkerLoop(void* arg) {
+        WorkerPool* pool = static_cast<WorkerPool*>(arg);
+        pool->runLoginWorker();
+        return nullptr;
+    }
+
+    // Opens ONE connection for this thread's entire life, then loops
+    // forever: pop a transaction request, process it, push the result,
+    // repeat. Exits only when the queue is shut down and drained.
+    void runTransactionWorker() {
+        const char* connStr = std::getenv("BANK_DB_URL");
+        if (!connStr) {
+            std::cerr << "Transaction worker: BANK_DB_URL not set, exiting\n";
+            return;
+        }
+        pqxx::connection myConn(connStr);   // this thread's own, private connection
+
+        TransactionRequest req;
+        while (transactionQueue_.pop(req)) {
+            bool ok = db_.transaction(req, bank_, myConn);   // first in db
+
+            TransactionResponse resp;
+            resp.requestId = 0;
+            resp.type = req.transaction_type;
+            resp.amount = req.transaction_amount;
+            resp.success = ok;   // real outcome from the db write
+
+            long long bal;
+            resp.newBalanceCents = bank_.getBalance(req.account_id, bal) ? bal : 0;
+
+            responseQueue_.push(resp);
+        }
+    }
+
+    // worker never touches the transaction queue and vice versa
+    void runLoginWorker() {
+        const char* connStr = std::getenv("BANK_DB_URL");
+        if (!connStr) {
+            std::cerr << "Login worker: BANK_DB_URL not set, exiting\n";
+            return;
+        }
+        pqxx::connection myConn(connStr);
+
+        LoginRequest req;
+        while (loginQueue_.pop(req)) {
+            db_.login(req);   // login() currently reports outcome via req.connection->send(...)
         }
     }
 
 public:
-    WorkerPool(Bank& bank, Load_DB& db, JobHub& hub, ResponseQueue& responseQueue,
-               int numLoginWorkers = 2, int numTransactionWorkers = 4)
-        : hub_(hub), bank_(bank), db_(db), responseQueue_(responseQueue)
+    WorkerPool(Bank& bank, Load_DB& db,
+               RequestQueue<TransactionRequest>& transactionQueue,
+               RequestQueue<LoginRequest>& loginQueue,
+               ResponseQueue& responseQueue,
+               int numTransactionWorkers = 6,
+               int numLoginWorkers = 2)
+        : transactionQueue_(transactionQueue), loginQueue_(loginQueue),
+          bank_(bank), db_(db), responseQueue_(responseQueue)
     {
-        for (int i = 0; i < numLoginWorkers; i++) {
-            pthread_t thread;
-            ThreadArgs* args = new ThreadArgs{this, JobType::LOGIN};
-            if (pthread_create(&thread, nullptr, workerLoop, args) != 0) {
-                delete args;
-                throw std::runtime_error("Failed to create login worker thread");
-            }
-            workers_.push_back(thread);
-        }
-
         for (int i = 0; i < numTransactionWorkers; i++) {
             pthread_t thread;
-            ThreadArgs* args = new ThreadArgs{this, JobType::TRANSACTION};
-            if (pthread_create(&thread, nullptr, workerLoop, args) != 0) {
-                delete args;
+            if (pthread_create(&thread, nullptr, transactionWorkerLoop, this) != 0) {
                 throw std::runtime_error("Failed to create transaction worker thread");
             }
-            workers_.push_back(thread);
+            transactionWorkers_.push_back(thread);
+        }
+
+        for (int i = 0; i < numLoginWorkers; i++) {
+            pthread_t thread;
+            if (pthread_create(&thread, nullptr, loginWorkerLoop, this) != 0) {
+                throw std::runtime_error("Failed to create login worker thread");
+            }
+            loginWorkers_.push_back(thread);
         }
     }
 
     ~WorkerPool() {
-        hub_.shutdown();
-        for (auto& t : workers_) {
-            pthread_join(t, nullptr);
-        }
+        transactionQueue_.shutdown();
+        loginQueue_.shutdown();
+        for (auto& t : transactionWorkers_) pthread_join(t, nullptr);
+        for (auto& t : loginWorkers_) pthread_join(t, nullptr);
     }
 
-    //deleting copy operations
     WorkerPool(const WorkerPool&) = delete;
     WorkerPool& operator=(const WorkerPool&) = delete;
 };

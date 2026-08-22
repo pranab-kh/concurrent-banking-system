@@ -12,6 +12,7 @@ class Account
 {
 private:
     int account_id;
+    std::string account_number;  
     std::string account_holder;
     int64_t actual_balance;
     int64_t available_balance;
@@ -92,6 +93,7 @@ public:
     }
 
     Account(int account_id_,
+            std::string account_number_, 
             std::string account_holder_,
             int64_t actual_balance_,
             int64_t available_balance_,
@@ -102,15 +104,16 @@ public:
             std::string account_updated_at_,
             HashTable<int, std::shared_ptr<Transaction>> transactions_) 
         : account_id(std::move(account_id_)),
-          account_holder(std::move(account_holder_)),
-          actual_balance(std::move(actual_balance_)),
-          available_balance(std::move(available_balance_)),
-          hold_amount(std::move(hold_amount_)),
-          account_status(std::move(account_status_)),
-          account_type(std::move(account_type_)),
-          account_created_at(std::move(account_created_at_)),
-          account_updated_at(std::move(account_updated_at_)),
-          transactions(std::move(transactions_)) // this now uses hashtable's move constructor
+            account_number(std::move(account_number_)),  
+            account_holder(std::move(account_holder_)),
+            actual_balance(std::move(actual_balance_)),
+            available_balance(std::move(available_balance_)),
+            hold_amount(std::move(hold_amount_)),
+            account_status(std::move(account_status_)),
+            account_type(std::move(account_type_)),
+            account_created_at(std::move(account_created_at_)),
+            account_updated_at(std::move(account_updated_at_)),
+            transactions(std::move(transactions_)) // this now uses hashtable's move constructor
     {
         initMutex();
     }
@@ -118,14 +121,30 @@ public:
     // Getters
     int get_account_id() const { return account_id; }
     const std::string &get_account_holder() const { return account_holder; }
-    int64_t get_actual_balance() const { return actual_balance; }
-    int64_t get_available_balance() const { return available_balance; }
+    int64_t get_actual_balance() const 
+    {
+        MutexGuard guard(mutex_);
+        return actual_balance;
+    }
+    
+    int64_t get_available_balance() const 
+    {
+        MutexGuard guard(mutex_);
+        return available_balance;
+    }
+
+    const std::string& get_account_number() const { return account_number; }
+
     int64_t get_hold_amount() const { return hold_amount; }
+
     const std::string &get_account_status() const { return account_status; }
+
     const std::string &get_account_type() const { return account_type; }
+
     const std::string &get_account_created_at() const { return account_created_at; }
+
     const std::string &get_account_updated_at() const { return account_updated_at; }
-    //revisit after getAll -- #
+
     const HashTable<int, std::shared_ptr<Transaction>>& get_transactions() const { return transactions; }
 
    
@@ -140,7 +159,6 @@ public:
         {
             throw std::invalid_argument("Deposit amount must be positive");
         }
-
         MutexGuard guard(mutex_);
         actual_balance += amountCents;
         available_balance += amountCents;
@@ -153,20 +171,16 @@ public:
         {
             throw std::invalid_argument("Withdrawal amount must be positive");
         }
-
         MutexGuard guard(mutex_);
         if (amountCents > available_balance)
         {
             return false;
         }
-
         actual_balance -= amountCents;
-                available_balance -= amountCents;
-
+        available_balance -= amountCents;
         return true;
     }
 
-    // these all are internal variants
     void depositUnlocked(int64_t amountCents)
     {
         if (amountCents <= 0)
@@ -174,8 +188,7 @@ public:
             throw std::invalid_argument("Deposit amount must be positive");
         }
         actual_balance += amountCents;
-                available_balance += amountCents;
-
+        available_balance += amountCents;
     }
 
     bool withdrawUnlocked(int64_t amountCents)
@@ -190,7 +203,6 @@ public:
         }
         actual_balance -= amountCents;
         available_balance -= amountCents;
-
         return true;
     }
 
