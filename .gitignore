@@ -8,3 +8,5 @@ build/
 .env
 cmake-build/
 backend/src/create_account_test.cpp
+backend/include/fraud_detector.hpp
+backend/src/fraud_test.cpp

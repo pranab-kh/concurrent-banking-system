@@ -47,3 +47,15 @@ add_executable(create_account_test
 target_include_directories(create_account_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
 target_link_libraries(create_account_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
 target_link_directories(create_account_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
+
+add_executable(fraud_test
+    backend/src/fraud_test.cpp
+    backend/src/database_loader.cpp
+    backend/src/bcrypt.c
+    backend/src/crypt_blowfish.c
+    backend/src/crypt_gensalt.c
+    backend/src/wrapper.c
+)
+target_include_directories(fraud_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+target_link_libraries(fraud_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+target_link_directories(fraud_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
