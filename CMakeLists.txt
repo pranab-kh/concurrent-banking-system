@@ -45,3 +45,18 @@ add_executable(bank_test
 target_include_directories(bank_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
 target_link_libraries(bank_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
 target_link_directories(bank_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
+
+# Actual runnable server (starts Drogon, registers WebSocket controllers).
+# Kept as a separate target/file so backend/src/main.cpp (the existing test
+# harness) is untouched — see backend/src/server_main.cpp for details.
+add_executable(bank_server
+    backend/src/server_main.cpp
+    backend/src/bcrypt.c
+    backend/src/crypt_blowfish.c
+    backend/src/crypt_gensalt.c
+    backend/src/wrapper.c
+)
+
+target_include_directories(bank_server PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+target_link_libraries(bank_server PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+target_link_directories(bank_server PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)

@@ -1,9 +1,13 @@
+# Qt Creator
+.qtcreator/
+*.user
+*.user.*
+
+# CMake build directories
 build/
+cmake-build-*/
+
+# Compiled files
 *.o
+*.obj
 *.exe
-.vscode/
-.idea/
-*.swp
-.DS_Store
-.env
-cmake-build/

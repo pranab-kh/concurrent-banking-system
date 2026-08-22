@@ -4,8 +4,11 @@ project(bank VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
-
+find_package(Qt6 REQUIRED COMPONENTS
+    Quick
+    QuickControls2
+    WebSockets
+)
 qt_standard_project_setup(REQUIRES 6.10)
 
 # Content of downloaded design from Figma to Qt or similar

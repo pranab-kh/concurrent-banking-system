@@ -11,25 +11,27 @@
 #include <vector>
 #include <stdexcept>
 
-enum class JobType { LOGIN, TRANSACTION, NONE };
+enum class JobType { LOGIN, TRANSACTION, ACCOUNT_CREATION, NONE };
 
 struct Job {
     JobType type;
     LoginRequest loginReq;
     TransactionRequest txnReq;
+    AccountCreationRequest accountReq;
 };
 
 class JobHub {
 private:
     circular_queue<LoginRequest> loginQueue_;
     circular_queue<TransactionRequest> transactionQueue_;
+    circular_queue<AccountCreationRequest> accountQueue_;
     pthread_mutex_t mutex_;
     pthread_cond_t notEmpty_;
     bool shuttingDown_ = false;
 
 public:
-    JobHub(int loginCapacity = 100, int transactionCapacity = 500)
-        : loginQueue_(loginCapacity), transactionQueue_(transactionCapacity)
+    JobHub(int loginCapacity = 100, int transactionCapacity = 500, int accountCapacity = 100)
+        : loginQueue_(loginCapacity), transactionQueue_(transactionCapacity), accountQueue_(accountCapacity)
     {
         if (pthread_mutex_init(&mutex_, nullptr) != 0) {
             throw std::runtime_error("Failed to initialize JobHub mutex");
@@ -62,16 +64,23 @@ public:
         pthread_cond_signal(&notEmpty_);
     }
 
+    void pushAccountCreation(AccountCreationRequest req) {
+        MutexGuard guard(mutex_);
+        if (shuttingDown_) return;
+        accountQueue_.push(req);
+        pthread_cond_signal(&notEmpty_);
+    }
+
     bool pop(JobType homeType, Job& outJob) {
         MutexGuard guard(mutex_);
 
-        // sleep efficiently while both queues are empt and not shutting down
-        while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && !shuttingDown_) {
+        // sleep efficiently while all queues are empty and not shutting down
+        while (loginQueue_.isEmpty() && transactionQueue_.isEmpty() && accountQueue_.isEmpty() && !shuttingDown_) {
             pthread_cond_wait(&notEmpty_, &mutex_);
         }
 
         //wake up for shutdown
-        if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty()) {
+        if (shuttingDown_ && loginQueue_.isEmpty() && transactionQueue_.isEmpty() && accountQueue_.isEmpty()) {
             return false;
         }
 
@@ -80,6 +89,12 @@ public:
                 outJob.type = JobType::LOGIN;
                 outJob.loginReq = loginQueue_.front();
                 loginQueue_.pop();
+                return true;
+            }
+            if (!accountQueue_.isEmpty()) { // account creation is auth/DB work, same lane as login
+                outJob.type = JobType::ACCOUNT_CREATION;
+                outJob.accountReq = accountQueue_.front();
+                accountQueue_.pop();
                 return true;
             }
             if (!transactionQueue_.isEmpty()) { //else checks for transaction queue
@@ -99,6 +114,12 @@ public:
                 outJob.type = JobType::LOGIN;
                 outJob.loginReq = loginQueue_.front();
                 loginQueue_.pop();
+                return true;
+            }
+            if (!accountQueue_.isEmpty()) {
+                outJob.type = JobType::ACCOUNT_CREATION;
+                outJob.accountReq = accountQueue_.front();
+                accountQueue_.pop();
                 return true;
             }
         }
@@ -147,6 +168,8 @@ private:
         while (hub_.pop(homeType, job)) {
             if (job.type == JobType::LOGIN) {
                 db_.login(job.loginReq);
+            } else if (job.type == JobType::ACCOUNT_CREATION) {
+                db_.create_account(job.accountReq);
             } else {
                 TransactionResponse resp = bank_.process(job.txnReq);
                 responseQueue_.push(resp);
