@@ -181,7 +181,9 @@ Item {
                             ComboBox {
                                 id: accountTypeBox
                                 Layout.fillWidth: true
-                                model: ["Savings", "Current", "Fixed Deposit", "Student"]
+                                // Must match the DB's account_table_account_type_check
+                                // constraint exactly: CHECKING / SAVING / BUSINESS.
+                                model: ["SAVING", "CHECKING", "BUSINESS"]
                             }
                         }
 
@@ -216,6 +218,7 @@ Item {
 
                         // SUBMIT BUTTON
                         Button {
+                            id: submitButton
                             text: "Create Account"
                             Layout.fillWidth: true
                             Layout.preferredHeight: 48
@@ -236,15 +239,31 @@ Item {
                             }
 
                             onClicked: {
-                                if (userIdField.text === "" || fullNameField.text === "" || passwordField.text === "") {
+                                if (fullNameField.text === "" || passwordField.text === "") {
                                     statusText.text = "Please fill in all required fields!"
                                     return
                                 }
 
-                                statusText.text = ""
+                                statusText.text = "Submitting..."
+                                submitButton.enabled = false
 
-                                // Trigger the creation signal
+                                // Trigger the creation signal (kept for anything else listening)
                                 createaccount.submitAccountCreation(
+                                    userIdField.text,
+                                    fullNameField.text,
+                                    addressField.text,
+                                    mobileField.text,
+                                    emailField.text,
+                                    genderBox.currentText,
+                                    nidField.text,
+                                    accountTypeBox.currentText,
+                                    passwordField.text
+                                )
+
+                                // Actually send it to the backend.
+                                // userIdField left blank -> brand-new user (backend creates a fresh user_id).
+                                // userIdField filled -> existing user adding another account (verified by password).
+                                backend.createAccount(
                                     userIdField.text,
                                     fullNameField.text,
                                     addressField.text,
@@ -257,7 +276,22 @@ Item {
                                 )
                             }
                         }
+
+                        Connections {
+                            target: backend
+                            function onCreateAccountResult(success, message) {
+                                submitButton.enabled = true
+
+                                if (success) {
+                                    statusText.color = "#009645"
+                                    statusText.text = "Account created successfully!"
+                                    mainStack.pop()
+                                } else {
+                                    statusText.color = "red"
+                                    statusText.text = message !== "" ? message : "Account creation failed."
+                                }
+                            }
+                        }
                     }
                 }
 }
-

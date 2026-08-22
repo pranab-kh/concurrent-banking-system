@@ -10,8 +10,8 @@ ApplicationWindow {
     color: "#f7f9fa"
 
     // Global properties accessible on all screens
-    property string currentUsername:"pratik"
-    property string userSessionPassword: "thapa"
+    property string currentUsername: ""
+    property string userSessionPassword: ""
 
     // Master Navigation Controller
     StackView {

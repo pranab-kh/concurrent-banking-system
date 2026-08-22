@@ -1,20 +1,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import bank
 
 Item {
     id: adminDashboardPage
-
-    // Signals to connect with your C++ backend controller
-    signal verifyUser(string userId)
-    signal suspendUser(string userId)
-    signal viewUserDetails(string userId)
 
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // 1. TOP HEADER BAR
+        // TOP HEADER BAR
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 60
@@ -54,183 +50,174 @@ Item {
             }
         }
 
-        // 2. TAB NAVIGATION
-        TabBar {
-            id: adminTabBar
-            Layout.fillWidth: true
-
-            TabButton { text: "User Management & Verification" }
-            TabButton { text: "Transaction Ledger" }
-        }
-
-        // 3. TAB CONTENT VIEWS
-        StackLayout {
+        // DEPOSIT / WITHDRAW
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: adminTabBar.currentIndex
+            Layout.margins: 24
+            spacing: 16
 
-            // ==========================================
-            // TAB 1: USER MANAGEMENT & VERIFICATION
-            // ==========================================
-            Item {
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
+            Text {
+                text: "Fund or Debit an Account"
+                font.pixelSize: 16
+                font.bold: true
+                color: "#333333"
+            }
+
+            Text {
+                text: "Enter the target account number, choose Deposit or Withdraw, and confirm. This moves real money via the backend — same transaction engine as Send Money."
+                font.pixelSize: 12
+                color: "#666666"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.preferredWidth: 480
+            }
+
+            ColumnLayout {
+                Layout.preferredWidth: 420
+                spacing: 12
+
+                TextField {
+                    id: targetAccountField
+                    placeholderText: "Target Account Number"
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    validator: IntValidator { bottom: 1 }
+                    Layout.fillWidth: true
+                }
+
+                TextField {
+                    id: adminAmountField
+                    placeholderText: "Amount (NPR)"
+                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                    validator: DoubleValidator { bottom: 0.01 }
+                    Layout.fillWidth: true
+                }
+
+                TextField {
+                    id: adminRemarksField
+                    placeholderText: "Remarks (optional)"
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
                     spacing: 12
+                    Layout.fillWidth: true
 
-                    Text {
-                        text: "Account Holders Overview"
-                        font.pixelSize: 16
-                        font.bold: true
-                        color: "#333333"
-                    }
-
-                    // User Accounts List
-                    ListView {
-                        id: userListView
+                    Button {
+                        id: adminDepositButton
+                        text: "Deposit"
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        spacing: 8
+                        Layout.preferredHeight: 46
 
-                        // Sample Model (Replace with your C++ QAbstractListModel or JSON backend)
-                        model: ListModel {
-                            ListElement { userId: "NPB1001"; fullName: "Pranab Kharel"; mobile: "9841234567"; accountType: "Savings"; status: "Pending" }
-                            ListElement { userId: "NPB1002"; fullName: "Sakar Baby Dollakoti"; mobile: "9812345678"; accountType: "Current"; status: "Active" }
-                            ListElement { userId: "NPB1003"; fullName: "Pratik Singh Thapa"; mobile: "9801122334"; accountType: "Savings"; status: "Active" }
+                        background: Rectangle {
+                            color: "#009645"
+                            radius: 8
+                        }
+                        contentItem: Text {
+                            text: "➕ Deposit"
+                            color: "white"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
                         }
 
-                        delegate: Rectangle {
-                            width: userListView.width
-                            height: 70
-                            color: "#F9F9F9"
-                            border.color: "#E0E0E0"
-                            radius: 6
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 10
-
-                                ColumnLayout {
-                                    spacing: 2
-                                    Text { text: model.fullName + " (" + model.userId + ")"; font.bold: true; font.pixelSize: 14; color: "#001F3F" }
-                                    Text { text: model.accountType + " • " + model.mobile; font.pixelSize: 12; color: "#666666" }
-                                }
-
-                                Item { Layout.fillWidth: true } // Spacer
-
-                                // Status Badge
-                                Rectangle {
-                                    Layout.preferredWidth: 70
-                                    Layout.preferredHeight: 24
-                                    radius: 12
-                                    color: model.status === "Active" ? "#E8F5E9" : (model.status === "Pending" ? "#FFF3E0" : "#FFEBEE")
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: model.status
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                        color: model.status === "Active" ? "#2E7D32" : (model.status === "Pending" ? "#E65100" : "#C62828")
-                                    }
-                                }
-
-                                // Action Buttons
-                                Button {
-                                    text: model.status === "Pending" ? "Verify" : "Suspend"
-                                    Layout.preferredHeight: 32
-                                    onClicked: {
-                                        if (model.status === "Pending") {
-                                            adminDashboardPage.verifyUser(model.userId)
-                                            model.status = "Active" // Immediate UI update
-                                        } else {
-                                            adminDashboardPage.suspendUser(model.userId)
-                                            model.status = "Suspended"
-                                        }
-                                    }
-                                }
+                        onClicked: {
+                            if (targetAccountField.text === "" || adminAmountField.text === "") {
+                                adminStatusText.color = "red"
+                                adminStatusText.text = "Enter an account number and amount."
+                                return
                             }
+
+                            adminStatusText.color = "#666666"
+                            adminStatusText.text = "Processing deposit..."
+                            adminDepositButton.enabled = false
+                            adminWithdrawButton.enabled = false
+
+                            var amountCents = Math.round(parseFloat(adminAmountField.text) * 100)
+                            backend.deposit(parseInt(targetAccountField.text), amountCents, adminRemarksField.text)
                         }
                     }
+
+                    Button {
+                        id: adminWithdrawButton
+                        text: "Withdraw"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 46
+
+                        background: Rectangle {
+                            color: "#B00020"
+                            radius: 8
+                        }
+                        contentItem: Text {
+                            text: "➖ Withdraw"
+                            color: "white"
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        onClicked: {
+                            if (targetAccountField.text === "" || adminAmountField.text === "") {
+                                adminStatusText.color = "red"
+                                adminStatusText.text = "Enter an account number and amount."
+                                return
+                            }
+
+                            adminStatusText.color = "#666666"
+                            adminStatusText.text = "Processing withdrawal..."
+                            adminDepositButton.enabled = false
+                            adminWithdrawButton.enabled = false
+
+                            var amountCents = Math.round(parseFloat(adminAmountField.text) * 100)
+                            backend.withdraw(parseInt(targetAccountField.text), amountCents, adminRemarksField.text)
+                        }
+                    }
+                }
+
+                Text {
+                    id: adminStatusText
+                    text: ""
+                    font.pixelSize: 13
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
             }
 
-            // ==========================================
-            // TAB 2: TRANSACTION MONITORING
-            // ==========================================
-            Item {
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 12
+            Item { Layout.fillHeight: true } // Spacer
+        }
+    }
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Text {
-                            text: "Audit Live Transactions"
-                            font.pixelSize: 16
-                            font.bold: true
-                            color: "#333333"
-                        }
-                        Item { Layout.fillWidth: true }
-                        TextField {
-                            placeholderText: "Search User or Txn ID..."
-                            Layout.preferredWidth: 200
-                        }
+    Connections {
+        target: backend
+        function onTransactionResult(success, message) {
+            adminDepositButton.enabled = true
+            adminWithdrawButton.enabled = true
+
+            if (success) {
+                // Parse the target account's new balance directly from
+                // this response rather than reading backend.accountBalanceCents
+                // — that property reflects whichever account this message
+                // was about, so using it here would silently overwrite the
+                // *admin's own* cached balance with the target account's balance.
+                var newBalanceText = ""
+                try {
+                    var parsed = JSON.parse(message)
+                    if (parsed && typeof parsed.balance_cents === "number") {
+                        newBalanceText = " New balance: NPR " +
+                            (parsed.balance_cents / 100).toLocaleString(Qt.locale(), 'f', 2)
                     }
-
-                    // Transactions List
-                    ListView {
-                        id: txnListView
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        spacing: 8
-
-                        model: ListModel {
-                            ListElement { txnId: "TXN99201"; sender: "NPB1002"; receiver: "NPB1003"; amount: "NPR 15,000"; time: "10:42 AM"; status: "Completed" }
-                            ListElement { txnId: "TXN99202"; sender: "NPB1001"; receiver: "NPB1002"; amount: "NPR 2,500"; time: "11:15 AM"; status: "Flagged" }
-                            ListElement { txnId: "TXN99203"; sender: "NPB1003"; receiver: "NPB1001"; amount: "NPR 50,000"; time: "11:30 AM"; status: "Completed" }
-                        }
-
-                        delegate: Rectangle {
-                            width: txnListView.width
-                            height: 65
-                            color: "#FFFFFF"
-                            border.color: "#E0E0E0"
-                            radius: 6
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 12
-
-                                ColumnLayout {
-                                    spacing: 2
-                                    Text { text: model.txnId + " • " + model.time; font.bold: true; font.pixelSize: 13; color: "#333333" }
-                                    Text { text: "From: " + model.sender + " ➔ To: " + model.receiver; font.pixelSize: 12; color: "#666666" }
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                Text {
-                                    text: model.amount
-                                    font.bold: true
-                                    font.pixelSize: 14
-                                    color: "#001F3F"
-                                    Layout.rightMargin: 10
-                                }
-
-                                Text {
-                                    text: model.status
-                                    font.bold: true
-                                    font.pixelSize: 11
-                                    color: model.status === "Flagged" ? "red" : "green"
-                                }
-                            }
-                        }
-                    }
+                } catch (e) {
+                    // message wasn't JSON — just skip the balance detail
                 }
+
+                adminStatusText.color = "#009645"
+                adminStatusText.text = "Success." + newBalanceText
+                targetAccountField.text = ""
+                adminAmountField.text = ""
+                adminRemarksField.text = ""
+            } else {
+                adminStatusText.color = "red"
+                adminStatusText.text = (message && message !== "") ? message : "Transaction failed."
             }
         }
     }
