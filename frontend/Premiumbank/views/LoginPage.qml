@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import bank
 
 Item {
     id: loginPage
@@ -29,6 +30,17 @@ Item {
                 source: "../image/logoo.png"
                 fillMode: Image.PreserveAspectCrop
             }
+
+            // Hidden admin entry point: long-press the logo. No real admin
+            // authentication exists on the backend yet, so this is
+            // deliberately not a visible/labeled button — just a way for
+            // testing to reach AdminPanel.qml without exposing it to
+            // regular users. Replace with a proper admin login flow once
+            // the backend has one.
+            MouseArea {
+                anchors.fill: parent
+                onPressAndHold: mainStack.push("AdminPanel.qml")
+            }
         }
 
         // 2. BANK TITLE
@@ -55,7 +67,9 @@ Item {
         // 3. INPUT FIELDS
         TextField {
             id: usernameField
-            placeholderText: "Username"
+            placeholderText: "User ID"
+            inputMethodHints: Qt.ImhDigitsOnly
+            validator: IntValidator { bottom: 0 }
             Layout.fillWidth: true
         }
 
@@ -78,6 +92,7 @@ Item {
 
         // 4. LOGIN BUTTON
         Button {
+            id: loginButton
             text: "Login"
             Layout.fillWidth: true
             Layout.preferredHeight: 50
@@ -98,29 +113,35 @@ Item {
 
             onClicked: {
                 if (usernameField.text === "" || passwordField.text === "") {
-                    statusText.text = "Please enter both username and password."
+                    statusText.text = "Please enter both User ID and password."
                     return
                 }
 
-                statusText.text = ""
+                statusText.text = "Logging in..."
+                loginButton.enabled = false
 
-                // Check Admin Credentials
-                if (usernameField.text.trim() === "admin" && passwordField.text === "admin123") {
-                    usernameField.text = ""
-                    passwordField.text = ""
-                    mainStack.push("AdminPanel.qml")
-                }
-                // Customer Login
-                else {
-                    // Safe property assignments
-                    if (typeof rootWindow !== "undefined") {
-                        rootWindow.userSessionPassword = passwordField.text
-                        rootWindow.currentUserName = usernameField.text
-                    }
+                // Stash the password so DashboardPage / SendMoneyPage can
+                // re-verify it locally (matches existing userSessionPassword
+                // pattern used elsewhere in the app).
+                rootwindow.userSessionPassword = passwordField.text
+                rootwindow.currentUsername = usernameField.text
 
+                backend.login(parseInt(usernameField.text), passwordField.text)
+            }
+        }
+
+        Connections {
+            target: backend
+            function onLoginResult(success, message) {
+                loginButton.enabled = true
+
+                if (success) {
+                    statusText.text = ""
                     usernameField.text = ""
                     passwordField.text = ""
                     mainStack.push("DashboardPage.qml")
+                } else {
+                    statusText.text = (message && message !== "") ? message : "Login failed. Please try again."
                 }
             }
         }
@@ -152,5 +173,6 @@ Item {
                 }
             }
         }
+    
     }
 }

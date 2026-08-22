@@ -76,44 +76,47 @@ Load_DB load;
 load.create_account(create);
 load.create_account(create1);
 
-load.transaction(deposit);
-load.transaction(withdraw);
-load.transaction(withdraw2);
-load.transaction(transfer);
+// NOTE: Load_DB::transaction() was removed -- it wrote to Postgres but had
+// no caller anywhere in the real server (Bank::process() was, and remains,
+// the only path wired to reply to clients). It's replaced by
+// applyDeposit()/applyWithdraw()/applyTransfer(), which Bank now calls
+// directly so balances are DB-authoritative. See bank.hpp.
+int64_t actualBal, availBal, toActualBal, toAvailBal;
+load.applyDeposit(deposit.account_id, deposit.transaction_amount, deposit.remarks, actualBal, availBal);
+load.applyWithdraw(withdraw.account_id, withdraw.transaction_amount, withdraw.remarks, actualBal, availBal);
+load.applyWithdraw(withdraw2.account_id, withdraw2.transaction_amount, withdraw2.remarks, actualBal, availBal);
+load.applyTransfer(transfer.account_id, transfer.to_account.value(), transfer.transaction_amount, transfer.remarks,
+                    actualBal, availBal, toActualBal, toAvailBal);
 
 Load_DB a;
 a.display();
 
 
-
-
-
-
-    // Thread_Distributor thread_divider;
-    // thread_divider.display();
+    Thread_Distributor thread_divider;
+    thread_divider.display();
 
  
-    // std::cout<<"Initializing the Universal Port Gateway..."<<std::endl;
+    std::cout<<"Initializing the Universal Port Gateway..."<<std::endl;
 
-    // //configuring the port
-    // int port;
-    // const char* port_env= std::getenv("PORT");
+    //configuring the port
+    int port;
+    const char* port_env= std::getenv("PORT");
 
-    // if(port_env != nullptr)
-    // {
-    //     port = std::stoi(port_env);
-    // }
-    // else
-    // {
-    //     port = 8080;
-    // }
-    // drogon::app().addListener("0.0.0.0",port);
+    if(port_env != nullptr)
+    {
+        port = std::stoi(port_env);
+    }
+    else
+    {
+        port = 8080;
+    }
+    drogon::app().addListener("0.0.0.0",port);
 
-    // // no of thread to handle requests and divide
-    // drogon::app().setThreadNum(2);
+    // no of thread to handle requests and divide
+    drogon::app().setThreadNum(2);
 
-    // //start of the application loop
-    // drogon::app().run();
+    //start of the application loop
+    drogon::app().run();
 
 
 

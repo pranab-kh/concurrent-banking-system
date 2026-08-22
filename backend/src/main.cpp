@@ -4,6 +4,8 @@
 #include <iostream>
 #include <unistd.h>
 
+JobHub* globalJobHub = nullptr;
+
 void printBalance(Bank& bank, int accountId, const std::string& label) {
     long long balance;
     if (bank.getBalance(accountId, balance)) {
@@ -36,6 +38,7 @@ int main() {
     JobHub hub;
     ResponseQueue responseQueue;
     WorkerPool pool(bank, loader, hub, responseQueue, 2, 4);
+    globalJobHub = &hub;
 
     TransactionRequest req;
     req.account_id = testAccountId;

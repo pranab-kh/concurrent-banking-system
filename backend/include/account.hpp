@@ -24,17 +24,73 @@ private:
     HashTable<int, std::shared_ptr<Transaction>> transactions;   
     mutable pthread_mutex_t mutex_;
 
+    // pthread_mutex_t is a plain-data struct — declaring it as a member does
+    // NOT initialize it. Every constructor must explicitly call
+    // pthread_mutex_init(), or the mutex is left holding whatever garbage
+    // bytes happened to be on the heap. Locking/unlocking/destroying that
+    // "mutex" is undefined behavior, and was the root cause of the
+    // "double free or corruption" crash on shutdown: freshly-mapped memory
+    // from the OS is usually zeroed (which by luck matches
+    // PTHREAD_MUTEX_INITIALIZER, so it *seemed* to work at runtime), but
+    // once memory gets reused the leftover bytes can make pthread's internal
+    // bookkeeping treat the mutex as a robust/shared one and corrupt the
+    // heap when pthread_mutex_destroy() runs across the many Account
+    // objects torn down at shutdown.
+    void initMutex()
+    {
+        if (pthread_mutex_init(&mutex_, nullptr) != 0)
+        {
+            throw std::runtime_error("Failed to initialize Account mutex");
+        }
+    }
+
 public:
     // Default constructor
-    Account() = default;
+    Account()
+    {
+        initMutex();
+    }
 
     // // Delete copy operations (non-copyable)
     Account(const Account &) = delete;
     Account &operator=(const Account &) = delete;
 
-    // // Default move operations (move-only)
-    Account(Account &&) = default;
-    Account &operator=(Account &&) = default;
+    // Move operations: give the moved-to object its OWN fresh mutex rather
+    // than bit-copying the source's pthread_mutex_t (which `= default` would
+    // do). Copying live mutex state is undefined behavior in the same way
+    // as leaving it uninitialized -- see initMutex() above.
+    Account(Account &&other) noexcept
+        : account_id(other.account_id),
+          account_holder(std::move(other.account_holder)),
+          actual_balance(other.actual_balance),
+          available_balance(other.available_balance),
+          hold_amount(other.hold_amount),
+          account_status(std::move(other.account_status)),
+          account_type(std::move(other.account_type)),
+          account_created_at(std::move(other.account_created_at)),
+          account_updated_at(std::move(other.account_updated_at)),
+          transactions(std::move(other.transactions))
+    {
+        initMutex();
+    }
+
+    Account &operator=(Account &&other) noexcept
+    {
+        if (this == &other) return *this;
+
+        account_id = other.account_id;
+        account_holder = std::move(other.account_holder);
+        actual_balance = other.actual_balance;
+        available_balance = other.available_balance;
+        hold_amount = other.hold_amount;
+        account_status = std::move(other.account_status);
+        account_type = std::move(other.account_type);
+        account_created_at = std::move(other.account_created_at);
+        account_updated_at = std::move(other.account_updated_at);
+        transactions = std::move(other.transactions);
+        // mutex_ already initialized for `this` from construction; keep it.
+        return *this;
+    }
 
     Account(int account_id_,
             std::string account_number_, 
@@ -59,6 +115,7 @@ public:
             account_updated_at(std::move(account_updated_at_)),
             transactions(std::move(transactions_)) // this now uses hashtable's move constructor
     {
+        initMutex();
     }
 
     // Getters
@@ -152,6 +209,25 @@ public:
     int64_t getBalanceUnlocked() const
     {
         return available_balance;
+    }
+
+    // Overwrites the cached balances with authoritative values just read
+    // back from Postgres (e.g. the RETURNING clause of an UPDATE), instead
+    // of adjusting the in-memory value by +/- amount. Postgres computed its
+    // new value from whatever the row actually held at that moment, so this
+    // keeps the in-memory cache honest even if the row had been edited
+    // directly in the DB since it was last loaded/touched here.
+    void setBalances(int64_t newActualBalance, int64_t newAvailableBalance)
+    {
+        MutexGuard guard(mutex_);
+        actual_balance = newActualBalance;
+        available_balance = newAvailableBalance;
+    }
+
+    void setBalancesUnlocked(int64_t newActualBalance, int64_t newAvailableBalance)
+    {
+        actual_balance = newActualBalance;
+        available_balance = newAvailableBalance;
     }
 
     ~Account()

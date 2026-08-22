@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import bank
 
 Item {
     Column {
@@ -14,7 +15,9 @@ Item {
             spacing: 4
 
             Text {
-                text: "Good Evening, Pratik"
+                text: backend.accountInfoAvailable
+                      ? "Good Evening, " + backend.accountName
+                      : "Good Evening, " + rootwindow.currentUsername
                 font.family: Style.mainFont
                 font.pixelSize: 22
                 font.bold: true
@@ -22,7 +25,9 @@ Item {
             }
 
             Text {
-                text: "Account No: 04810017509872"
+                text: backend.accountInfoAvailable
+                      ? "Account No: " + backend.accountId
+                      : "Account No: " + rootwindow.currentUsername
                 font.family: Style.mainFont
                 font.pixelSize: 14
                 color: "#666666"
@@ -52,7 +57,13 @@ Item {
                 }
 
                 Text {
-                    text: "NPR 2,744.97"
+                    // backend.accountBalanceCents isn't populated by the
+                    // backend yet (login only sends a plain "SUCCESS"
+                    // string right now), so this shows a placeholder until
+                    // that field exists. Once it does, this updates itself.
+                    text: backend.accountInfoAvailable
+                          ? "NPR " + (backend.accountBalanceCents / 100).toLocaleString(Qt.locale(), 'f', 2)
+                          : "Balance unavailable"
                     font.family: Style.mainFont
                     font.pixelSize: 28
                     font.bold: true
@@ -117,5 +128,6 @@ Item {
                 onClicked: mainStack.push("ReceiveMoneyPage.qml")
             }
         }
+
     }
 }

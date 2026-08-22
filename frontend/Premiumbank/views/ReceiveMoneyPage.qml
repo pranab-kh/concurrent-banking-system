@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import bank
 
 Item {
     ColumnLayout {
@@ -33,16 +34,35 @@ Item {
             Layout.alignment: Qt.AlignHCenter
 
             Image {
+                id: qrImage
                 anchors.fill: parent
                 anchors.margins: 16
-                // Put your QR code image in your project folder!
-                source: "../image/qr.png"
                 fillMode: Image.PreserveAspectFit
+                smooth: false // keep QR edges crisp, no blur on the modules
+                source: backend.accountInfoAvailable && backend.accountId > 0
+                        ? qrCodeHelper.accountQrDataUrl(backend.accountId)
+                        : ""
+                visible: source !== ""
+            }
+
+            // Shown until a real account_id is available (e.g. before the
+            // backend's login reply includes it, or if login hasn't
+            // completed yet) instead of silently showing a blank box.
+            Text {
+                anchors.centerIn: parent
+                visible: !qrImage.visible
+                text: "QR code will appear\nonce your account loads."
+                horizontalAlignment: Text.AlignHCenter
+                color: "#999999"
+                font.family: Style.mainFont
+                font.pixelSize: 12
             }
         }
 
         Text {
-            text: "Account: 04810017509872"
+            text: backend.accountInfoAvailable
+                  ? "Account: " + backend.accountId
+                  : "Account: " + rootwindow.currentUsername
             font.family: Style.mainFont
             font.pixelSize: 16
             font.bold: true

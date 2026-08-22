@@ -16,29 +16,30 @@ Item {
         }
 
         Text {
-            text: "Send Money"
+            text: "Deposit Money"
             font.family: Style.mainFont
             font.pixelSize: 22
             font.bold: true
             color: "#1a237e"
         }
 
-        TextField {
-            id: recipientName
-            placeholderText: "Recipient's Name"
-            Layout.fillWidth: true
-        }
-
-        TextField {
-            id: recipientAccount
-            placeholderText: "Account Number"
-            Layout.fillWidth: true
+        Text {
+            text: "Depositing into Account " + rootwindow.currentUsername
+            font.family: Style.mainFont
+            font.pixelSize: 13
+            color: "#666666"
         }
 
         TextField {
             id: amountField
             placeholderText: "Amount (NPR)"
             inputMethodHints: Qt.ImhFormattedNumbersOnly
+            Layout.fillWidth: true
+        }
+
+        TextField {
+            id: remarksField
+            placeholderText: "Remarks (optional)"
             Layout.fillWidth: true
         }
 
@@ -51,7 +52,7 @@ Item {
 
         Button {
             id: confirmButton
-            text: "Confirm Transfer"
+            text: "Confirm Deposit"
             Layout.fillWidth: true
             Layout.preferredHeight: 50
 
@@ -61,7 +62,7 @@ Item {
             }
 
             contentItem: Text {
-                text: "Confirm Transfer"
+                text: "Confirm Deposit"
                 color: "white"
                 font.bold: true
                 font.family: Style.mainFont
@@ -70,8 +71,8 @@ Item {
             }
 
             onClicked: {
-                if (recipientAccount.text === "" || amountField.text === "") {
-                    errorMsg.text = "Please enter an account number and amount."
+                if (amountField.text === "") {
+                    errorMsg.text = "Please enter an amount."
                     return
                 }
 
@@ -86,20 +87,13 @@ Item {
                     return
                 }
 
-                var destination = parseInt(recipientAccount.text)
-                if (isNaN(destination) || destination <= 0) {
-                    errorMsg.text = "Please enter a valid recipient account."
-                    return
-                }
-
                 errorMsg.text = ""
                 confirmButton.enabled = false
 
-                backend.sendMoney(
+                backend.deposit(
                     backend.accountId,
-                    destination,
                     amountCents,
-                    recipientName.text
+                    remarksField.text
                 )
             }
         }
@@ -112,7 +106,7 @@ Item {
                 if (success) {
                     mainStack.pop()
                 } else {
-                    errorMsg.text = message !== "" ? message : "Transfer failed."
+                    errorMsg.text = message !== "" ? message : "Deposit failed."
                 }
             }
         }

@@ -2,9 +2,14 @@ cmake_minimum_required(VERSION 3.16)
 
 project(bank VERSION 0.1 LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 REQUIRED COMPONENTS
+    Quick
+    QuickControls2
+    WebSockets
+)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
@@ -15,6 +20,12 @@ endif()
 
 qt_add_executable(appbank
     main.cpp
+    BackendClient.h
+    BackendClient.cpp
+    QrCodeHelper.h
+    QrCodeHelper.cpp
+    qrcodegen.hpp
+    qrcodegen.cpp
 )
 
 qt_add_qml_module(appbank
@@ -27,6 +38,7 @@ qt_add_qml_module(appbank
         views/LoginPage.qml
         views/SendMoneyPage.qml
         views/ReceiveMoneyPage.qml
+        views/DepositPage.qml
         views/CreateAccount.qml
         views/AdminPanel.qml
     RESOURCES
@@ -52,6 +64,7 @@ target_link_libraries(appbank
     PRIVATE
         Qt6::Quick
         Qt6::QuickControls2
+        Qt6::WebSockets
 )
 
 install(TARGETS appbank
