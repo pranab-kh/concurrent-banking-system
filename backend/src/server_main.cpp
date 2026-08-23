@@ -35,15 +35,19 @@ int main()
     std::cout << "Initializing in-memory bank...\n";
     Bank bank(loader);
 
-    std::cout << "Starting WorkerPool + JobHub...\n";
-    JobHub hub;
+        std::cout << "Starting WorkerPool...\n";
+    RequestQueue<TransactionRequest> transactionQueue;
+    RequestQueue<LoginRequest> loginQueue;
     ResponseQueue responseQueue;
-    WorkerPool pool(bank, loader, hub, responseQueue, /*loginWorkers=*/2, /*transactionWorkers=*/4);
+    WorkerPool pool(bank, loader, transactionQueue, loginQueue, responseQueue,
+                     /*numTransactionWorkers=*/6, /*numLoginWorkers=*/2);
 
-    // web_socket_controllers.hpp reads this global to hand off parsed
-    // requests from the WebSocket controllers into the JobHub.
-    globalJobHub = &hub;
-
+    // web_socket_controllers.hpp reads these globals to hand off parsed
+    // requests from the WebSocket controllers into the same queues
+    // WorkerPool's worker threads are pulling from.
+    globalLoginQueue = &loginQueue;
+    globalTransactionQueue = &transactionQueue;
+    globalBank = &bank;
     // NOTE: WebSocketController<T> subclasses (Authentication_Controller,
     // Transaction_Controller) are auto-created and auto-registered by
     // Drogon itself the moment their translation unit is linked in (which

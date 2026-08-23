@@ -4,6 +4,7 @@
 
 #include "BackendClient.h"
 #include "QrCodeHelper.h"
+#include "StressTestRunner.h"
 
 int main(int argc, char *argv[])
 {
@@ -13,6 +14,7 @@ int main(int argc, char *argv[])
     backendClient.connectToServer();
 
     QrCodeHelper qrCodeHelper;
+    StressTestRunner stressTestRunner;
 
     QQmlApplicationEngine engine;
 
@@ -24,6 +26,11 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(
         "qrCodeHelper",
         &qrCodeHelper
+    );
+
+    engine.rootContext()->setContextProperty(
+        "stressTestRunner",
+        &stressTestRunner
     );
 
     engine.loadFromModule("bank", "Main");

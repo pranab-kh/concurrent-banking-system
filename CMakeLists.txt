@@ -36,14 +36,29 @@ target_include_directories(bank_main PRIVATE ${LIBPQXX_INCLUDE_DIRS})
 target_link_libraries(bank_main PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
 target_link_directories(bank_main PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
 
-add_executable(create_account_test
-    backend/src/create_account_test.cpp
+#add_executable(create_account_test
+#   backend/src/create_account_test.cpp
+#    backend/src/database_loader.cpp
+#    backend/src/bcrypt.c
+#    backend/src/crypt_blowfish.c
+#    backend/src/crypt_gensalt.c
+#   backend/src/wrapper.c
+#)
+#target_include_directories(create_account_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+#target_link_libraries(create_account_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+#target_link_directories(create_account_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
+
+# Actual runnable server (starts Drogon, registers WebSocket controllers).
+# Kept as a separate target/file so backend/src/main.cpp (the existing test
+# harness) is untouched — see backend/src/server_main.cpp for details.
+add_executable(bank_server
+    backend/src/server_main.cpp
     backend/src/database_loader.cpp
     backend/src/bcrypt.c
     backend/src/crypt_blowfish.c
     backend/src/crypt_gensalt.c
     backend/src/wrapper.c
 )
-target_include_directories(create_account_test PRIVATE ${LIBPQXX_INCLUDE_DIRS})
-target_link_libraries(create_account_test PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
-target_link_directories(create_account_test PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)
+target_include_directories(bank_server PRIVATE ${LIBPQXX_INCLUDE_DIRS})
+target_link_libraries(bank_server PRIVATE Threads::Threads ${LIBPQXX_LIBRARIES} pq Drogon::Drogon)
+target_link_directories(bank_server PRIVATE ${LIBPQXX_LIBRARY_DIRS} /opt/homebrew/opt/libpq/lib)

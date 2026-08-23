@@ -11,6 +11,14 @@ struct LoginRequest
     int user_id;
     std::string password;
     drogon::WebSocketConnectionPtr connection;
+
+    // True for a "refresh" request sent over the already-authenticated
+    // /login socket (re-fetch this user's account/balance from the DB
+    // on demand). False for a normal password login. Load_DB::login()
+    // skips the password check when this is set, since the dashboard
+    // already proved identity at the original login and only wants a
+    // fresh snapshot, not to re-authenticate.
+    bool is_refresh = false;
 };
 
 struct AccountCreationRequest

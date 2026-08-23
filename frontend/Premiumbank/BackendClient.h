@@ -36,6 +36,18 @@ public:
 
     Q_INVOKABLE void login(int userId, const QString &password);
 
+    // Re-fetches this user's account/balance from the DB on demand, over
+    // the same /login socket. No password required — the server accepts
+    // this only because the client already authenticated at the original
+    // login. Reuses loginResult/accountInfoChanged, same as login().
+    Q_INVOKABLE void refresh(int userId);
+
+    // Clears cached account state and drops back to "not logged in".
+    // Purely local — no message is sent to the backend, so the server's
+    // Login_Status row is left as-is until the row naturally goes stale
+    // or a future logout protocol message is added.
+    Q_INVOKABLE void logout();
+
     Q_INVOKABLE void createAccount(const QString &userId,      // optional, empty string if new user
                                     const QString &fullName,
                                     const QString &address,
