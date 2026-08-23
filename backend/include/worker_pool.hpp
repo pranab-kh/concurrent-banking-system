@@ -64,19 +64,23 @@ private:
     }
 
     // worker never touches the transaction queue and vice versa
-    void runLoginWorker() {
-        const char* connStr = std::getenv("BANK_DB_URL");
-        if (!connStr) {
-            std::cerr << "Login worker: BANK_DB_URL not set, exiting\n";
-            return;
-        }
-        pqxx::connection myConn(connStr);
+    void runLoginWorker()
+{
+    LoginRequest req;
 
-        LoginRequest req;
-        while (loginQueue_.pop(req)) {
-            db_.login(req);   // login() currently reports outcome via req.connection->send(...)
-        }
+    while (loginQueue_.pop(req))
+    {
+        std::cerr << "[LOGIN WORKER] Processing user_id="
+                  << req.user_id
+                  << std::endl;
+
+        db_.login(req);
+
+        std::cerr << "[LOGIN WORKER] Finished user_id="
+                  << req.user_id
+                  << std::endl;
     }
+}
 
 public:
     WorkerPool(Bank& bank, Load_DB& db,

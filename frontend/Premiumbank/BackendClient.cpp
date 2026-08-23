@@ -25,6 +25,22 @@ BackendClient::BackendClient(QObject *parent)
             this, &BackendClient::onTransactionConnected);
     connect(&m_transactionSocket, &QWebSocket::textMessageReceived,
             this, &BackendClient::onTransactionMessage);
+    connect(&m_loginSocket,
+        &QWebSocket::errorOccurred,
+        this,
+        [this](QAbstractSocket::SocketError error)
+        {
+            qDebug()
+                << "Login WebSocket error:"
+                << error
+                << m_loginSocket.errorString();
+
+            emit loginResult(
+                false,
+                "WebSocket error: " +
+                m_loginSocket.errorString()
+            );
+        });
 }
 
 void BackendClient::connectToServer()
@@ -63,6 +79,39 @@ void BackendClient::login(int userId, const QString &password)
 
     qDebug() << "Sending login:" << message;
     m_loginSocket.sendTextMessage(message);
+}
+
+void BackendClient::refresh(int userId)
+{
+    if (m_loginSocket.state() != QAbstractSocket::ConnectedState)
+    {
+        qDebug() << "Login socket not connected";
+        emit loginResult(false, "Not connected to server");
+        return;
+    }
+
+    QJsonObject json;
+    json["type"] = "refresh";
+    json["user_id"] = userId;
+
+    const QString message = QString::fromUtf8(
+        QJsonDocument(json).toJson(QJsonDocument::Compact));
+
+    qDebug() << "Sending refresh:" << message;
+    m_loginSocket.sendTextMessage(message);
+}
+
+void BackendClient::logout()
+{
+    qDebug() << "Logging out locally (no backend message sent)";
+
+    m_accountName.clear();
+    m_accountId = 0;
+    m_accountBalanceCents = 0;
+    m_accountInfoAvailable = false;
+    m_lastTransactionTargetAccountId = 0;
+
+    emit accountInfoChanged();
 }
 
 void BackendClient::onLoginConnected()

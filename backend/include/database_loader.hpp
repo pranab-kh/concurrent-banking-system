@@ -8,7 +8,9 @@
 #include <memory>
 #include "password_hash.hpp"
 #include "hashtable.hpp"
-#include "account_number_generator.hpp" 
+#include "account_number_generator.hpp"
+#include "mutex_guard.hpp" 
+#include <json/json.h>
 
 class Bank; 
 
@@ -17,7 +19,8 @@ class Load_DB
 
     HashTable<int, std::shared_ptr<User>> bank_db;
     std::unique_ptr<pqxx::connection> connect_database;
-
+    pthread_mutex_t connectionMutex_ = PTHREAD_MUTEX_INITIALIZER;
+    
 public:
     Load_DB()
     {
@@ -146,13 +149,27 @@ public:
 
     void login(LoginRequest &l)
     {
+        std::cerr << "[DEBUG] login() entered for user_id=" << l.user_id << std::endl;
+        MutexGuard guard(connectionMutex_);
+        std::cerr << "[DEBUG] login() acquired connectionMutex_" << std::endl;
         try
         {
-            if (!connect_database->is_open())
+                        // NOTE: this used to reuse the long-lived connect_database
+            // member, but that connection can go silently stale (observed
+            // hanging mid-UPDATE with zero server-side trace in
+            // pg_stat_activity — consistent with Neon's pooler dropping an
+            // idle connection between statements). Open a fresh connection
+            // for this call instead, same pattern WorkerPool's transaction
+            // workers already use successfully with their own myConn.
+            const char *connStr = std::getenv("BANK_DB_URL");
+            if (!connStr)
             {
-                establish_connection();
+                std::cerr << "Couldn't connect to database" << std::endl;
+                l.connection->send("Connection Error DB");
+                return;
             }
-            if (!connect_database->is_open())
+            pqxx::connection freshConn(connStr);
+            if (!freshConn.is_open())
             {
                 std::cerr << "Couldn't connect to database" << std::endl;
                 l.connection->send("Connection Error DB");
@@ -163,43 +180,71 @@ public:
             std::shared_ptr<User> existingUser;
             bool userAlreadyLoaded = bank_db.find(l.user_id, existingUser);
 
-            pqxx::work login(*connect_database);
-
-            if (!userAlreadyLoaded)
+            if (l.is_refresh)
             {
-                std::string query1 =
-                    "SELECT u.password_hash FROM User_Table u WHERE u.user_id = ($1);";
-                pqxx::result verification = login.exec_params(query1, l.user_id);
-                if (verification.size() == 0)
+                // Refresh skips password verification entirely — the
+                // client already authenticated at the original login and
+                // is only asking for a current snapshot of their own
+                // account. Just confirm the user still exists.
+                if (!userAlreadyLoaded)
                 {
-                    std::cerr << "Invalid username of password" << std::endl;
-                    l.connection->send("Invalid username or password");
-                    return;
+                    pqxx::nontransaction check(freshConn);
+                    std::string queryExists =
+                        "SELECT 1 FROM User_Table u WHERE u.user_id = ($1);";
+                    pqxx::result exists = check.exec_params(queryExists, l.user_id);
+                    if (exists.size() == 0)
+                    {
+                        std::cerr << "Refresh requested for unknown user_id" << std::endl;
+                        l.connection->send("Invalid user_id");
+                        return;
+                    }
                 }
-                hashed_password = verification[0]["password_hash"].as<std::string>();
             }
             else
             {
-                hashed_password = existingUser->get_password_hash();
+                pqxx::work login(freshConn);
+
+                if (!userAlreadyLoaded)
+                {
+                    std::string query1 =
+                        "SELECT u.password_hash FROM User_Table u WHERE u.user_id = ($1);";
+                    pqxx::result verification = login.exec_params(query1, l.user_id);
+                    if (verification.size() == 0)
+                    {
+                        std::cerr << "Invalid username of password" << std::endl;
+                        l.connection->send("Invalid username or password");
+                        return;
+                    }
+                    hashed_password = verification[0]["password_hash"].as<std::string>();
+                }
+                else
+                {
+                    hashed_password = existingUser->get_password_hash();
+                }
+
+                bool verified = verify_password(l.password, hashed_password);
+                if (!verified)
+                {
+                    std::cerr << "Invalid username of password" << std::endl;
+                    l.connection->send("Invalid username of password");
+                    return;
+                }
+
+                std::string status = "ONLINE";
+                std::string update_db =
+                    "UPDATE User_Table SET Login_Status = $1 WHERE User_Id = $2;";
+                login.exec_params(update_db, status, l.user_id);
+                login.commit();
             }
 
-            bool verified = verify_password(l.password, hashed_password);
-            if (!verified)
+            // Re-query the DB whenever this is the user's first time being
+            // cached, OR whenever a refresh was explicitly requested —
+            // refresh's entire purpose is to bypass the in-memory cache
+            // and pick up changes made elsewhere (e.g. a transfer another
+            // session sent into this account) since the initial load.
+            if (!userAlreadyLoaded || l.is_refresh)
             {
-                std::cerr << "Invalid username of password" << std::endl;
-                l.connection->send("Invalid username of password");
-                return;
-            }
-
-            std::string status = "ONLINE";
-            std::string update_db =
-                "UPDATE User_Table SET Login_Status = $1 WHERE User_Id = $2;";
-            login.exec_params(update_db, status, l.user_id);
-            login.commit();
-
-            if (!userAlreadyLoaded)
-            {
-                pqxx::nontransaction read(*connect_database);
+                pqxx::nontransaction read(freshConn);
                 std::string query2 =
                     "SELECT u.user_id,u.full_name,u.address,u.mobile,u.email,u.gender,u.nid,u.password_hash,u.user_created_at,u.user_updated_at,u.login_status,"
                     "a.account_id,a.account_number,a.account_holder,a.actual_balance,a.available_balance,a.hold_amount,a.account_status,a.account_type,a.account_created_at,a.account_updated_at,"
@@ -214,11 +259,62 @@ public:
                 store_users(res);
             }
 
-            std::shared_ptr<User> u;
-            if (bank_db.find(l.user_id, u))
-            {
-                u->set_login(status);
-            }
+           std::shared_ptr<User> u;
+bool foundUser = bank_db.find(l.user_id, u);
+
+if (foundUser && !l.is_refresh)
+{
+    // Only a real login flips Login_Status to ONLINE. A refresh's
+    // store_users() call above already reloaded login_status straight
+    // from the DB, so there's nothing to set here.
+    std::string onlineStatus = "ONLINE";
+    u->set_login(onlineStatus);
+}
+
+std::cerr << (l.is_refresh ? "[DEBUG] Refresh successful for user_id="
+                            : "[DEBUG] Login successful for user_id=")
+          << l.user_id << std::endl;
+
+if (l.connection)
+{
+    // Build the JSON payload the frontend (BackendClient::
+    // updateAccountInfoFromLoginMessage) expects: full_name,
+    // account_id, balance_cents. Plain "SUCCESS" left accountInfoAvailable
+    // false forever, so the dashboard fell back to showing the raw
+    // typed-in user_id as if it were the account number.
+    Json::Value resp;
+    resp["status"] = "success";
+
+    if (u)
+    {
+        resp["full_name"] = u->get_full_name();
+
+        // A user can hold multiple accounts; the current frontend only
+        // has room for one on the dashboard, so send the first account
+        // found. TODO: extend the protocol to a list if multi-account
+        // support is needed on the dashboard.
+        auto accountsAll = u->get_accounts().getAll();
+        if (!accountsAll.empty())
+        {
+            auto firstAccount = accountsAll.begin()->second;
+            resp["account_id"] = firstAccount->get_account_id();
+            resp["balance_cents"] = static_cast<Json::Int64>(firstAccount->get_actual_balance());
+        }
+    }
+
+    Json::StreamWriterBuilder writer;
+    writer["indentation"] = "";
+    const std::string payload = Json::writeString(writer, resp);
+
+    std::cerr << "[DEBUG] Sending login payload to client: " << payload << std::endl;
+
+    l.connection->send(payload);
+}
+else
+{
+    std::cerr << "[DEBUG] ERROR: l.connection is null!"
+              << std::endl;
+}
         }
         catch (std::exception &e)
         {

@@ -26,6 +26,8 @@ qt_add_executable(appbank
     QrCodeHelper.cpp
     qrcodegen.hpp
     qrcodegen.cpp
+    StressTestRunner.h
+    StressTestRunner.cpp
 )
 
 qt_add_qml_module(appbank

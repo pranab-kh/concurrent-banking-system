@@ -20,7 +20,8 @@ inline RequestQueue<TransactionRequest> TransactionQueue;
 // not good practice to initialize obj in header file crash if multiple inclusion
 //inline to solve that better to instantinate the object in main later 
 
-inline JobHub* globalJobHub = nullptr;
+inline RequestQueue<LoginRequest>* globalLoginQueue = nullptr;
+inline RequestQueue<TransactionRequest>* globalTransactionQueue = nullptr;
 
 // Read-only handle for admin/reporting endpoints (Admin_Controller below).
 // Points at the same Bank instance WorkerPool uses to process transactions,
@@ -68,8 +69,18 @@ public:
                 return std::nullopt;
             }
 
-            if (!json.isMember("password") ||
-                !json["password"].isString())
+            // "refresh" requests re-fetch the already-logged-in user's
+            // account/balance on demand and don't carry a password —
+            // distinguish them with {"type":"refresh"}. Anything else
+            // (or no "type" field) is treated as a normal login attempt
+            // and still requires "password".
+            const bool isRefresh =
+                json.isMember("type") &&
+                json["type"].isString() &&
+                json["type"].asString() == "refresh";
+
+            if (!isRefresh &&
+                (!json.isMember("password") || !json["password"].isString()))
             {
                 std::cerr << "Missing or invalid password" << std::endl;
                 return std::nullopt;
@@ -79,7 +90,8 @@ public:
             LoginRequest login;
 
             login.user_id = json["user_id"].asInt();
-            login.password = json["password"].asString();
+            login.password = isRefresh ? std::string() : json["password"].asString();
+            login.is_refresh = isRefresh;
 
             // Store WebSocket connection
             login.connection = conn;
@@ -250,9 +262,10 @@ public:
     }
 
     // Make sure JobHub exists
-    if (globalJobHub == nullptr)
+        // Make sure the login queue exists
+    if (globalLoginQueue == nullptr)
     {
-        std::cerr << "JobHub is not initialized!" << std::endl;
+        std::cerr << "globalLoginQueue is not initialized!" << std::endl;
         conn->send("SERVER_ERROR");
         return;
     }
@@ -263,19 +276,42 @@ public:
         LoginRequest login =
             std::get<LoginRequest>(parsed_msg.value());
 
-        globalJobHub->pushLogin(login);
+        //globalLoginQueue->push(login);
+        bool queued = globalLoginQueue->push(login);
 
-        std::cout << "Login request added to JobHub"
+        if (!queued)
+            {
+            std::cerr << "Failed to queue login request" << std::endl;
+            conn->send("SERVER_BUSY");
+            return;
+            }
+
+        std::cout << "Login request added to queue"
+                  << std::endl;
+
+        std::cout << "Login request added to queue"
                   << std::endl;
     }
-    else if (std::holds_alternative<AccountCreationRequest>(parsed_msg.value()))
+                  else if (std::holds_alternative<AccountCreationRequest>(parsed_msg.value()))
     {
+        // create_account() doesn't need per-thread pqxx connections or a
+        // Bank& the way transaction() does, so unlike login/transactions
+        // it's called directly here rather than queued through WorkerPool.
+        // It reports its own outcome via a.connection->send(...) inside
+        // Load_DB::create_account(), so nothing further is needed here.
+        if (globalBank == nullptr)
+        {
+            std::cerr << "globalBank is not initialized!" << std::endl;
+            conn->send("SERVER_ERROR");
+            return;
+        }
+
         AccountCreationRequest accountReq =
             std::get<AccountCreationRequest>(parsed_msg.value());
 
-        globalJobHub->pushAccountCreation(accountReq);
+        globalBank->getDb().create_account(accountReq);
 
-        std::cout << "Account creation request added to JobHub"
+        std::cout << "Account creation request processed directly"
                   << std::endl;
     }
     else
@@ -402,18 +438,14 @@ public:
                 return;
             }
 
-            if (globalJobHub == nullptr)
+            if (globalTransactionQueue == nullptr)
             {
-                std::cerr << "JobHub is not initialized!" << std::endl;
+                std::cerr << "globalTransactionQueue is not initialized!" << std::endl;
                 conn->send("SERVER_ERROR");
                 return;
             }
 
-            // NOTE: this used to push into the standalone `TransactionQueue`
-            // declared at the top of this file, which nothing ever reads
-            // from (WorkerPool only pulls from JobHub). Route it there
-            // instead, same as login/account-creation above.
-            globalJobHub->pushTransaction(parsed_msg.value());
+            globalTransactionQueue->push(parsed_msg.value());
         }
     }
 
